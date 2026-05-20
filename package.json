@@ -1,0 +1,32 @@
+{
+  "name": "surf-skill",
+  "version": "1.0.0",
+  "description": "Multi-provider web skill (Tavily + Parallel AI) for Pi, OpenCode, Claude Code, Codex CLI, and GitHub Copilot CLI. Automatic provider fallback + multi-key rotation.",
+  "license": "MIT",
+  "author": "frederico-kluser",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/frederico-kluser/surf-skill.git"
+  },
+  "homepage": "https://github.com/frederico-kluser/surf-skill#readme",
+  "bugs": {
+    "url": "https://github.com/frederico-kluser/surf-skill/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "agent-skill",
+    "tavily",
+    "parallel-ai",
+    "web-search",
+    "connector",
+    "pi-coding-agent"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "pi": {
+    "skills": [
+      "./skills"
+    ]
+  }
+}
