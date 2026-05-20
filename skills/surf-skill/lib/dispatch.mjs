@@ -12,7 +12,40 @@ import { guardExpensive } from './cost.mjs';
 import { sleep } from './flags.mjs';
 
 const CACHEABLE = new Set(['search', 'extract', 'map']);
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
+
+// Detect the agent harness's bash timeout from env vars. The number is the
+// total time (ms) the harness will allow our process to live before SIGTERM.
+// We use this to abort early with an actionable error instead of being killed
+// silently.
+export function detectHarnessBudgetMs() {
+  if (process.env.SURF_AGENT_BUDGET_MS) {
+    const n = Number(process.env.SURF_AGENT_BUDGET_MS);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  if (process.env.BASH_DEFAULT_TIMEOUT_MS) {
+    const n = Number(process.env.BASH_DEFAULT_TIMEOUT_MS);
+    if (Number.isFinite(n) && n > 0) return n; // Claude Code
+  }
+  if (process.env.PI_BASH_DEFAULT_TIMEOUT_SECONDS) {
+    const n = Number(process.env.PI_BASH_DEFAULT_TIMEOUT_SECONDS);
+    if (Number.isFinite(n) && n > 0) return n * 1000; // Pi
+  }
+  if (process.env.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS) {
+    const n = Number(process.env.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  // Unknown harness — assume worst case (Copilot CLI without per-project hook).
+  return 30_000;
+}
+
+export function detectHarnessName() {
+  if (process.env.SURF_AGENT_BUDGET_MS) return 'override';
+  if (process.env.BASH_DEFAULT_TIMEOUT_MS) return 'claude-code';
+  if (process.env.PI_BASH_DEFAULT_TIMEOUT_SECONDS) return 'pi';
+  if (process.env.OPENCODE_EXPERIMENTAL_BASH_DEFAULT_TIMEOUT_MS) return 'opencode';
+  return 'unknown (assuming 30s — likely GH Copilot CLI without hook)';
+}
 
 export class DispatchError extends Error {
   constructor(code, message, details = {}) {
@@ -87,6 +120,12 @@ function backoff(attempt) {
 }
 
 export async function dispatch(operation, args, flags = {}) {
+  const startTs = Date.now();
+  const harnessBudget = detectHarnessBudgetMs();
+  const harnessName = detectHarnessName();
+  // Reserve a cushion so we surface the error before the harness kills us.
+  const cushion = Math.min(2000, Math.floor(harnessBudget * 0.1));
+
   const state = await loadState();
   let cachedHit = null;
   let cKey = null;
@@ -145,9 +184,28 @@ export async function dispatch(operation, args, flags = {}) {
       if (keyIdx === -1) { providerExhausted = true; break; }
       attempted.add(keyIdx);
 
+      // Self-budget check: abort BEFORE the harness SIGTERMs us.
+      const elapsed = Date.now() - startTs;
+      const remaining = harnessBudget - elapsed - cushion;
+      if (remaining <= 1000) {
+        throw new DispatchError(
+          'LikelyAgentTimeout',
+          `Operation '${operation}' would likely exceed the agent's bash timeout ` +
+          `(~${Math.round(harnessBudget / 1000)}s detected, harness=${harnessName}). ` +
+          `Run 'surf-skill project-config' in this project to raise the limit, ` +
+          `or use 'research-start' + 'research-poll' for long jobs.`,
+          { harness: harnessName, budgetMs: harnessBudget, elapsedMs: elapsed },
+        );
+      }
+
       const ctx = {
         key: state[providerName].keys[keyIdx],
-        timeout: flags.timeout ? Number(flags.timeout) : undefined,
+        // Constrain HTTP timeout to whatever's left in our budget so we don't
+        // sit waiting beyond what the harness will allow.
+        timeout: Math.min(
+          flags.timeout ? Number(flags.timeout) : Infinity,
+          remaining,
+        ),
         version: VERSION,
       };
 

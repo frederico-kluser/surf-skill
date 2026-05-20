@@ -31,12 +31,21 @@ git clone https://github.com/frederico-kluser/surf-skill.git
 cd surf-skill
 bash skills/surf-skill/install.sh
 surf-skill setup            # interactive wizard
+
+# In each project where you'll use surf-skill:
+cd path/to/your-project
+surf-skill project-config   # REQUIRED for Copilot CLI; recommended elsewhere
+
 surf-skill search "your query"
 ```
 
-That's it. The installer creates symlinks for all supported harnesses,
-configures their bash timeouts where possible, and seeds `keys.json` from
+The installer creates symlinks for all supported harnesses, configures their
+global bash timeouts where possible, and seeds `keys.json` from
 `$TAVILY_API_KEY` / `$PARALLEL_API_KEY` if those env vars are set.
+
+`surf-skill project-config` then writes per-project config so the bash tool
+in that repo doesn't time out — this is **required** for GitHub Copilot CLI
+(default 30 s) and **recommended** for Claude Code / Pi (raises 120 s → 300 s).
 
 ---
 
@@ -95,10 +104,12 @@ bash skills/surf-skill/install.sh
 # Symlink created at ~/.copilot/skills/ (via ~/.agents/skills/surf-skill).
 ```
 
-**Per-project**, add `.github/copilot-hooks.json`:
+**Per-project**, run inside the project root:
 
-```json
-{ "timeoutSec": 300 }
+```bash
+surf-skill project-config
+# writes .github/copilot-hooks.json with { "timeoutSec": 300 }
+# detects .github/ automatically; use --harness copilot --yes to force
 ```
 
 Without this, any `surf-skill` command other than `--help`, `--version`,
@@ -108,6 +119,11 @@ the full command set up to ~5 min per call.
 For longer operations, use Copilot CLI's async pattern: `/delegate` the
 `surf-skill research-start ...` call, then poll with `surf-skill
 research-poll <id>` from a regular session.
+
+If surf-skill detects the agent will likely kill the call before it can
+finish, it now aborts early with `LikelyAgentTimeout` and tells the agent
+to suggest `surf-skill project-config` to the user — instead of dying
+silently to SIGTERM.
 
 ### Pi Coding Agent
 
@@ -259,8 +275,19 @@ error already suggests `surf-skill setup`. Outside TTY, run
 or the providers are down. Run `surf-skill keys reset` to retry.
 
 **Command timed out in GH Copilot CLI**
-→ Add `.github/copilot-hooks.json` with `{ "timeoutSec": 300 }` to the
-project. See the Copilot CLI card above.
+→ Run `surf-skill project-config` inside the project root. See the
+Copilot CLI card above.
+
+**`❌ Error [LikelyAgentTimeout]: ...`**
+→ surf-skill detected the harness will kill the call before it finishes
+(typical on Copilot CLI without per-project config). Run `surf-skill
+project-config` in the project, then retry. Don't retry the same call
+without fixing the timeout first.
+
+**`❌ Error [KilledBySignal]: surf-skill received SIGTERM/SIGINT`**
+→ The harness killed us mid-flight. Same fix as `LikelyAgentTimeout`. The
+SIGTERM handler exists as a fallback — the self-budget check should fire
+first when env vars are set.
 
 **`❌ Error: EXPENSIVE_BLOCKED ...`**
 → Pass `--confirm-expensive` after confirming the cost with the user. Or
@@ -279,6 +306,7 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 ├── package.json
 ├── README.md           ← you're here
 ├── CHANGELOG-v2.md
+├── CHANGELOG-v2.1.md
 ├── LICENSE
 └── skills/
     └── surf-skill/
@@ -293,9 +321,10 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
         │   ├── flags.mjs          ← parsing + helpers
         │   ├── cost.mjs           ← estimateCredits + guard
         │   ├── format.mjs         ← markdown formatters
-        │   ├── dispatch.mjs       ← provider/key fallback engine
+        │   ├── dispatch.mjs       ← provider/key fallback + self-budget
         │   ├── keys-cmd.mjs       ← surf-skill keys add/remove/...
         │   ├── setup.mjs          ← interactive onboarding
+        │   ├── project-config.mjs ← surf-skill project-config
         │   └── providers/
         │       ├── index.mjs
         │       ├── tavily.mjs
