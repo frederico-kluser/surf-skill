@@ -10,9 +10,10 @@ import { cacheKey, cacheGet, cacheSet } from './cache.mjs';
 import { getProvider, capabilityMap, providerFromRequestId } from './providers/index.mjs';
 import { guardExpensive } from './cost.mjs';
 import { sleep } from './flags.mjs';
+import { progress } from './progress.mjs';
 
 const CACHEABLE = new Set(['search', 'extract', 'map']);
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 
 // Detect the agent harness's bash timeout from env vars. The number is the
 // total time (ms) the harness will allow our process to live before SIGTERM.
@@ -137,6 +138,7 @@ export async function dispatch(operation, args, flags = {}) {
     if (cachedHit) {
       await audit({ op: operation, cache: 'hit', provider: cachedHit.provider });
       await recordUsage({ op: operation, provider: cachedHit.provider, credits: 0, cached: true });
+      progress.success(`${operation} cache hit (${cachedHit.provider})`);
       return cachedHit;
     }
   }
@@ -183,6 +185,7 @@ export async function dispatch(operation, args, flags = {}) {
 
       if (keyIdx === -1) { providerExhausted = true; break; }
       attempted.add(keyIdx);
+      progress.start(`${operation} → ${providerName} (key #${keyIdx})`);
 
       // Self-budget check: abort BEFORE the harness SIGTERMs us.
       const elapsed = Date.now() - startTs;
@@ -236,15 +239,22 @@ export async function dispatch(operation, args, flags = {}) {
           }
           if (kind === 'rate_limit_429') {
             consecutive429++;
-            if (attempt < 2) { await sleep(backoff(attempt)); continue; }
+            if (attempt < 2) {
+              progress.retry(`${providerName} 429 — backoff ${backoff(attempt)}ms (attempt ${attempt + 1}/3)`);
+              await sleep(backoff(attempt)); continue;
+            }
             break; // exhausted retries -> next key
           }
           if (kind === 'network') {
             consecutiveNetwork++;
-            if (attempt < 2) { await sleep(backoff(attempt) / 2); continue; }
+            if (attempt < 2) {
+              progress.retry(`${providerName} network error — backoff ${Math.round(backoff(attempt) / 2)}ms`);
+              await sleep(backoff(attempt) / 2); continue;
+            }
             break; // exhausted retries -> next key
           }
           if (kind === 'auth') {
+            progress.warn(`${providerName} key #${keyIdx} burned (${e.statusCode || 'auth'})`);
             markBurned(state, providerName, keyIdx, String(e.statusCode || 'auth'));
             await saveStateAtomic(state);
             break; // next key
@@ -252,11 +262,15 @@ export async function dispatch(operation, args, flags = {}) {
           if (kind === 'server_5xx') {
             consecutive5xx++;
             if (consecutive5xx >= 3) {
+              progress.warn(`${providerName} key #${keyIdx} burned (5xx x3)`);
               markBurned(state, providerName, keyIdx, '5xx');
               await saveStateAtomic(state);
               break; // next key
             }
-            if (attempt < 2) { await sleep(backoff(attempt)); continue; }
+            if (attempt < 2) {
+              progress.retry(`${providerName} 5xx — backoff ${backoff(attempt)}ms`);
+              await sleep(backoff(attempt)); continue;
+            }
             break;
           }
           // Unknown kind — treat as caller error to avoid masking bugs.
@@ -279,6 +293,11 @@ export async function dispatch(operation, args, flags = {}) {
         if (cKey && CACHEABLE.has(operation)) {
           await cacheSet(cKey, success);
         }
+        const credits = success.usage && success.usage.credits;
+        progress.success(
+          `${operation} ${providerName} ${success.latency_ms}ms` +
+          (credits != null ? ` (${credits} credits)` : '')
+        );
         return success;
       }
 

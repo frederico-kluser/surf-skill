@@ -170,7 +170,8 @@ If you see timeouts, the order of fixes:
 | Command | What it does | Provider(s) |
 |---|---|---|
 | `setup` | Interactive wizard to add keys (TTY) | n/a |
-| `search <query>` | Web search | tavily, parallel |
+| `project-config` | Write per-project bash-timeout config | n/a |
+| `search <q> [q2 ...]` | Web search; multiple positional args = **batch** | tavily, parallel |
 | `extract <url> ...` | Pull markdown from URLs | tavily, parallel |
 | `crawl <url>` | Recursive site crawl | tavily |
 | `map <url>` | Sitemap discovery | tavily |
@@ -193,7 +194,49 @@ Global flags every command accepts:
 --json                         Normalized envelope as JSON
 --raw-json                     Raw provider response (bypasses cache)
 --confirm-expensive            Allow operations estimated > 10 credits
+--quiet                        Silence progress logs (stderr)
 ```
+
+---
+
+## Batch your queries
+
+When you need to research **multiple angles** of the same topic, batch them
+in a single call. Each positional arg is an independent query:
+
+```bash
+surf-skill search "compare X vs Y" "alternatives to X" "X security issues"
+```
+
+- Runs sequentially (avoids rate-limit thrashing on a single key).
+- Partial failures are reported inline — the command exits `0` if at least
+  one query succeeded.
+- Total credits and timing surface in the markdown header and `--json` envelope.
+- Progress logs (see below) show `[i/N]` per query.
+
+This is the recommended way for an agent to gather multi-source context in
+one shot, instead of looping with N separate bash calls.
+
+---
+
+## Progress logs (stderr)
+
+Every operation emits one self-contained line per event to **stderr**, so
+both humans and the calling LLM can see what's happening without parsing
+the main result on stdout.
+
+```
+[surf 17:58:12] ▸ search → tavily (key #0)
+[surf 17:58:14] ✓ search tavily 1234ms (2 credits)
+[surf 17:58:14] ↻ tavily 429 — backoff 1500ms (attempt 1/3)
+[surf 17:58:18] ⚠ tavily key #0 burned (401)
+[surf 17:58:18] ▸ search → parallel (key #0)
+[surf 17:58:20] ✓ search parallel 2102ms (2 credits)
+[surf 17:58:20] ⏱ batch done: 3/3 ok, 0 failed (8200ms, 6 credits)
+```
+
+The format is stable for grep/parse. Use `--quiet` or `SURF_QUIET=1` to
+silence (CI, piping, tests). Stdout stays clean either way.
 
 ---
 
@@ -307,6 +350,7 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 ├── README.md           ← you're here
 ├── CHANGELOG-v2.md
 ├── CHANGELOG-v2.1.md
+├── CHANGELOG-v2.2.md
 ├── LICENSE
 └── skills/
     └── surf-skill/
@@ -325,6 +369,7 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
         │   ├── keys-cmd.mjs       ← surf-skill keys add/remove/...
         │   ├── setup.mjs          ← interactive onboarding
         │   ├── project-config.mjs ← surf-skill project-config
+        │   ├── progress.mjs       ← stderr progress events
         │   └── providers/
         │       ├── index.mjs
         │       ├── tavily.mjs

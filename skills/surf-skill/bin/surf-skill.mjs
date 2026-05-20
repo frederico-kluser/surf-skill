@@ -13,8 +13,9 @@ import { migrateLegacy } from '../lib/state.mjs';
 import { runSetup } from '../lib/setup.mjs';
 import { runProjectConfig, formatProjectConfigResult } from '../lib/project-config.mjs';
 import { providerFromRequestId } from '../lib/providers/index.mjs';
+import { progress, setSilent } from '../lib/progress.mjs';
 
-const VERSION = '2.1.0';
+const VERSION = '2.2.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -39,7 +40,8 @@ Commands:
                               harness used in this project doesn't kill us.
                               Auto-detects via .github/, .claude/, .pi/.
                               REQUIRED for GH Copilot CLI projects.
-  search <query>              Web search (default depth: advanced)
+  search <q> [<q2> ...]       Web search. Multiple positional args = batch
+                              (sequential, partial failures reported inline).
   extract <url> [url ...]     Fetch & extract content from URLs
   crawl <url>                 Crawl a site (Tavily only)
   map <url>                   Discover URLs on a site (Tavily only)
@@ -58,12 +60,20 @@ Global flags:
   --json                         Print normalized envelope as JSON
   --raw-json                     Print raw provider response (bypasses cache)
   --confirm-expensive            Allow operations estimated > 10 credits
+  --quiet                        Silence progress logs (stderr)
   --help, -h                     Show this help
   --version, -v                  Show version
+
+Progress logs (stderr):
+  surf-skill emits one line per event to stderr, e.g.:
+    [surf 17:58:12] ▸ search → tavily (key #0)
+    [surf 17:58:14] ✓ search tavily 1234ms (2 credits)
+  Format is stable for agent parsing. Use --quiet or SURF_QUIET=1 to silence.
 
 Examples:
   surf-skill setup
   surf-skill search "claude 4.7 release notes" --max 3
+  surf-skill search "topic A" "topic B" "topic C"      # batch (3 queries)
   surf-skill extract https://docs.anthropic.com/...
   surf-skill research-start "compare X and Y" --model pro --confirm-expensive
   surf-skill keys add --provider tavily tvly-...
@@ -101,10 +111,8 @@ function emitResult(envelope, flags) {
   out(formatFor(envelope));
 }
 
-async function cmdSearch(pos, flags) {
-  const query = pos.join(' ').trim();
-  if (!query) die('Usage: surf-skill search "query" [flags]');
-  const args = {
+function buildSearchArgs(query, flags) {
+  return {
     query,
     depth: flags.depth || 'advanced',
     max: flags.max,
@@ -124,7 +132,117 @@ async function cmdSearch(pos, flags) {
     exactMatch: flags['exact-match'],
     processor: flags.processor,
   };
-  emitResult(await dispatch('search', args, flags), flags);
+}
+
+async function cmdSearch(pos, flags) {
+  if (!pos.length) die('Usage: surf-skill search "query" [more queries ...]');
+
+  // Backward-compat: 1 positional arg = exactly one query (same as before).
+  if (pos.length === 1) {
+    const args = buildSearchArgs(pos[0], flags);
+    emitResult(await dispatch('search', args, flags), flags);
+    return;
+  }
+
+  // Batch mode: each positional arg is an independent query.
+  // Runs sequentially to avoid hammering one provider/key with N concurrent
+  // calls (which would trigger 429 rate limits).
+  await runSearchBatch(pos, flags);
+}
+
+async function runSearchBatch(queries, flags) {
+  progress.start(`batch: ${queries.length} queries`);
+  const batches = [];
+  let okCount = 0;
+  let failCount = 0;
+  let totalCredits = 0;
+  const t0 = Date.now();
+
+  for (let i = 0; i < queries.length; i++) {
+    const q = queries[i];
+    const label = `[${i + 1}/${queries.length}] "${q}"`;
+    progress.start(label);
+    const args = buildSearchArgs(q, flags);
+    try {
+      const env = await dispatch('search', args, flags);
+      okCount++;
+      const credits = env.usage && env.usage.credits;
+      if (credits != null) totalCredits += credits;
+      batches.push({
+        index: i,
+        query: q,
+        ok: true,
+        provider: env.provider,
+        latency_ms: env.latency_ms,
+        usage: env.usage,
+        data: env.data,
+        raw: env.raw,
+      });
+    } catch (e) {
+      failCount++;
+      const code = e.code || e.name || 'Error';
+      progress.fail(`${label} failed: [${code}] ${e.message || e}`);
+      batches.push({
+        index: i,
+        query: q,
+        ok: false,
+        error: { code, message: e.message || String(e), details: e.details },
+      });
+    }
+  }
+
+  const elapsed = Date.now() - t0;
+  progress.done(`batch done: ${okCount}/${queries.length} ok, ${failCount} failed (${elapsed}ms, ${totalCredits} credits)`);
+
+  emitBatchResult({
+    operation: 'search-batch',
+    summary: { total: queries.length, succeeded: okCount, failed: failCount, total_credits: totalCredits, latency_ms: elapsed },
+    batches,
+  }, flags);
+
+  // Exit non-zero only when EVERY query failed.
+  if (okCount === 0 && failCount > 0) process.exitCode = 1;
+}
+
+function emitBatchResult(payload, flags) {
+  if (flags['raw-json']) {
+    out(JSON.stringify(payload.batches.map(b => b.raw ?? b.error), null, 2));
+    return;
+  }
+  if (flags.json) {
+    // Strip `raw` from JSON output unless explicitly asked.
+    const safe = {
+      operation: payload.operation,
+      summary: payload.summary,
+      data: { batches: payload.batches.map(({ raw, ...rest }) => rest) },
+    };
+    out(JSON.stringify(safe, null, 2));
+    return;
+  }
+  // Markdown
+  const { summary, batches } = payload;
+  let md = `# Search batch (${summary.total} queries · ${summary.succeeded} ok · ${summary.failed} failed)\n\n`;
+  md += `_total: ${summary.total_credits} credits · ${summary.latency_ms}ms_\n\n`;
+  for (const b of batches) {
+    md += `---\n\n## [${b.index + 1}/${summary.total}] ${b.query}\n\n`;
+    if (!b.ok) {
+      md += `**❌ Failed:** \`[${b.error.code}]\` ${b.error.message}\n\n`;
+      continue;
+    }
+    md += `_provider: ${b.provider} · ${b.latency_ms}ms`;
+    if (b.usage && b.usage.credits != null) md += ` · ${b.usage.credits} credits`;
+    md += `_\n\n`;
+    const r = b.data;
+    if (r.answer) md += `**Answer:** ${r.answer}\n\n`;
+    (r.results || []).forEach((it, i) => {
+      md += `### [${i + 1}] ${it.title || it.url}\n${it.url}\n`;
+      if (it.score != null) md += `*score: ${typeof it.score === 'number' ? it.score.toFixed(2) : it.score}*\n`;
+      if (it.published_date) md += `*published: ${it.published_date}*\n`;
+      const content = it.content || '';
+      md += `\n${content.length > 1500 ? content.slice(0, 1500) + '…' : content}\n\n`;
+    });
+  }
+  out(md);
 }
 
 async function cmdExtract(pos, flags) {
@@ -350,6 +468,9 @@ if (cmd === '--version' || cmd === '-v') {
 }
 
 const { pos, flags } = parseFlags(rest);
+
+// Wire --quiet before any progress event fires.
+if (flags.quiet) setSilent(true);
 
 try {
   switch (cmd) {
