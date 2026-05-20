@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// surf — multi-provider web-skill CLI. Routes search/extract/crawl/map/research
+// surf-skill — multi-provider web-skill CLI. Routes search/extract/crawl/map/research
 // across Tavily and Parallel AI with automatic key + provider fallback.
 
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
@@ -10,13 +10,15 @@ import { runKeysSubcommand } from '../lib/keys-cmd.mjs';
 import { cacheClear } from '../lib/cache.mjs';
 import { readUsage, USAGE_LOG } from '../lib/audit.mjs';
 import { migrateLegacy } from '../lib/state.mjs';
+import { runSetup } from '../lib/setup.mjs';
 import { providerFromRequestId } from '../lib/providers/index.mjs';
 
 const VERSION = '2.0.0';
 
-const HELP = `surf — multi-provider web skill (Tavily + Parallel AI)
+const HELP = `surf-skill — multi-provider web skill (Tavily + Parallel AI)
 
 Commands:
+  setup                       Interactive onboarding wizard (TTY required)
   search <query>              Web search
   extract <url> [url ...]     Fetch & extract content from URLs
   crawl <url>                 Crawl a site (Tavily only)
@@ -40,14 +42,15 @@ Global flags:
   --version, -v                  Show version
 
 Examples:
-  surf search "claude 4.7 release notes" --max 3
-  surf extract https://docs.anthropic.com/...
-  surf research-start "compare X and Y" --model pro --confirm-expensive
-  surf keys add --provider tavily tvly-...
-  surf keys list
+  surf-skill setup
+  surf-skill search "claude 4.7 release notes" --max 3
+  surf-skill extract https://docs.anthropic.com/...
+  surf-skill research-start "compare X and Y" --model pro --confirm-expensive
+  surf-skill keys add --provider tavily tvly-...
+  surf-skill keys list
 
 Key & state are stored in ~/.config/surf/keys.json (chmod 600).
-Docs: ~/.agents/skills/surf/SKILL.md`;
+Docs: ~/.agents/skills/surf-skill/SKILL.md`;
 
 function die(msg, code = 1) {
   process.stderr.write(`❌ Error: ${msg}\n`);
@@ -80,7 +83,7 @@ function emitResult(envelope, flags) {
 
 async function cmdSearch(pos, flags) {
   const query = pos.join(' ').trim();
-  if (!query) die('Usage: surf search "query" [flags]');
+  if (!query) die('Usage: surf-skill search "query" [flags]');
   const args = {
     query,
     depth: flags.depth || 'basic',
@@ -105,7 +108,7 @@ async function cmdSearch(pos, flags) {
 }
 
 async function cmdExtract(pos, flags) {
-  if (!pos.length) die('Usage: surf extract <url1> [url2 ...]');
+  if (!pos.length) die('Usage: surf-skill extract <url1> [url2 ...]');
   if (pos.length > 20) die('extract supports at most 20 URLs per call.');
   const args = {
     urls: pos,
@@ -122,7 +125,7 @@ async function cmdExtract(pos, flags) {
 
 async function cmdCrawl(pos, flags) {
   const url = pos[0];
-  if (!url) die('Usage: surf crawl <url> [flags]');
+  if (!url) die('Usage: surf-skill crawl <url> [flags]');
   const args = {
     url,
     maxDepth: flags['max-depth'],
@@ -147,7 +150,7 @@ async function cmdCrawl(pos, flags) {
 
 async function cmdMap(pos, flags) {
   const url = pos[0];
-  if (!url) die('Usage: surf map <url> [flags]');
+  if (!url) die('Usage: surf-skill map <url> [flags]');
   const args = {
     url,
     maxDepth: flags['max-depth'],
@@ -167,7 +170,7 @@ async function cmdMap(pos, flags) {
 
 async function cmdResearchStart(pos, flags) {
   const input = pos.join(' ').trim();
-  if (!input) die('Usage: surf research-start "topic" [--model mini|auto|pro]');
+  if (!input) die('Usage: surf-skill research-start "topic" [--model mini|auto|pro]');
   const args = {
     input,
     model: flags.model || 'auto',
@@ -182,7 +185,7 @@ async function cmdResearchStart(pos, flags) {
 
 async function cmdResearchPoll(pos, flags) {
   const id = pos[0];
-  if (!id) die('Usage: surf research-poll <request_id>');
+  if (!id) die('Usage: surf-skill research-poll <request_id>');
   const decoded = providerFromRequestId(id);
   if (!decoded) die(`unknown request_id prefix in '${id}' (expected tvly:... or pllx:...)`);
   const envelope = await dispatch('research-poll', {}, { ...flags, __requestId: id });
@@ -194,10 +197,10 @@ async function cmdResearchPoll(pos, flags) {
 
 async function cmdResearch(pos, flags) {
   const input = pos.join(' ').trim();
-  if (!input) die('Usage: surf research "topic"');
+  if (!input) die('Usage: surf-skill research "topic"');
   const model = flags.model || 'mini';
   if (model === 'pro' || model === 'ultra') {
-    die(`Refusing sync research with model=${model} (would exceed timeout). Use 'surf research-start' + 'surf research-poll'.`);
+    die(`Refusing sync research with model=${model} (would exceed timeout). Use 'surf-skill research-start' + 'surf-skill research-poll'.`);
   }
   const startArgs = {
     input,
@@ -218,7 +221,7 @@ async function cmdResearch(pos, flags) {
       return;
     }
   }
-  out(`**Research did not finish in 50s.** Continue with: \`surf research-poll ${id}\``);
+  out(`**Research did not finish in 50s.** Continue with: \`surf-skill research-poll ${id}\``);
 }
 
 async function persistResearchHandle(envelope) {
@@ -234,7 +237,7 @@ async function persistResearchHandle(envelope) {
 }
 
 async function cmdUsage(_pos, flags) {
-  if (!flags.provider) die(`Usage: surf usage --provider <tavily|parallel>`);
+  if (!flags.provider) die(`Usage: surf-skill usage --provider <tavily|parallel>`);
   emitResult(await dispatch('usage', {}, flags), flags);
 }
 
@@ -277,13 +280,13 @@ async function cmdCost(_pos, flags) {
       md += `- ${e.ts} [${e.provider || '?'}] ${e.op}: ${e.credits ?? '—'}${e.cached ? ' (cache hit)' : ''}\n`;
     }
   }
-  md += '\nUse `surf cost --reset` to clear the local ledger.';
+  md += '\nUse `surf-skill cost --reset` to clear the local ledger.';
   out(md);
 }
 
 async function cmdKeys(pos, flags) {
   const sub = pos[0];
-  if (!sub) die('Usage: surf keys <add|remove|list|reset|clear> ...');
+  if (!sub) die('Usage: surf-skill keys <add|remove|list|reset|clear> ...');
   const subPos = pos.slice(1);
   try {
     const result = await runKeysSubcommand(sub, subPos, flags);
@@ -341,13 +344,21 @@ try {
     case 'cache-clear': await cmdCacheClear(); break;
     case 'cost': await cmdCost(pos, flags); break;
     case 'keys': await cmdKeys(pos, flags); break;
+    case 'setup': await runSetup(); break;
     default:
-      die(`Unknown command: ${cmd}. Try 'surf --help'.`);
+      die(`Unknown command: ${cmd}. Try 'surf-skill --help'.`);
   }
 } catch (e) {
   if (e instanceof DispatchError) {
     process.stderr.write(`❌ Error [${e.code}]: ${e.message}\n`);
+    if (e.code === 'NoProviderAvailable' && process.stdin.isTTY) {
+      process.stderr.write(`→ Run 'surf-skill setup' to configure keys interactively.\n`);
+    }
     process.exit(1);
+  }
+  if (e.code === 'NO_TTY') {
+    process.stderr.write(`❌ Error: ${e.message}\n`);
+    process.exit(2);
   }
   process.stderr.write(`❌ Error: ${e.message || String(e)}\n`);
   process.exit(1);

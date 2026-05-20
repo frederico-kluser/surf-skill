@@ -1,4 +1,4 @@
-// `surf keys` subcommands: add, remove, list (status), reset, clear.
+// `surf-skill keys` subcommands: add, remove, list (status), reset, clear.
 
 import { loadState, saveStateAtomic, clearBurned, PROVIDERS, KEYS_FILE } from './state.mjs';
 import { maskKey } from './flags.mjs';
@@ -25,7 +25,7 @@ function requireProvider(flags, allowAll = false) {
 export async function keysAdd(pos, flags) {
   const provider = requireProvider(flags);
   const key = pos[0];
-  if (!key) throw new Error('Usage: surf keys add --provider <name> <key>');
+  if (!key) throw new Error('Usage: surf-skill keys add --provider <name> <key>');
   const state = await loadState();
   if (state[provider].keys.includes(key)) {
     return { provider, added: false, reason: 'already exists', state };
@@ -39,7 +39,7 @@ export async function keysAdd(pos, flags) {
 export async function keysRemove(pos, flags) {
   const provider = requireProvider(flags);
   const target = pos[0];
-  if (target == null) throw new Error('Usage: surf keys remove --provider <name> <index|key>');
+  if (target == null) throw new Error('Usage: surf-skill keys remove --provider <name> <index|key>');
   const state = await loadState();
   const keys = state[provider].keys;
   let idx = -1;
@@ -70,7 +70,7 @@ export async function keysList(_pos, flags) {
     const burnedIdx = new Set(pp.burned.map(b => b.index));
     lines.push(`## ${p} (${pp.keys.length} key${pp.keys.length === 1 ? '' : 's'})`);
     if (!pp.keys.length) {
-      lines.push(`_no keys — add with \`surf keys add --provider ${p} <key>\`_\n`);
+      lines.push(`_no keys — add with \`surf-skill keys add --provider ${p} <key>\`_\n`);
       continue;
     }
     pp.keys.forEach((k, i) => {
@@ -133,6 +133,6 @@ export async function runKeysSubcommand(sub, pos, flags) {
     case 'reset': return keysReset(pos, flags);
     case 'clear': return keysClear(pos, flags);
     default:
-      throw new Error(`unknown 'surf keys' subcommand: '${sub}'. Valid: add, remove, list, reset, clear`);
+      throw new Error(`unknown 'surf-skill keys' subcommand: '${sub}'. Valid: add, remove, list, reset, clear`);
   }
 }

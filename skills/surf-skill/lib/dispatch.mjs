@@ -30,7 +30,7 @@ function buildChain(operation, state, flags) {
     if (!providerHasUsableKey(state, decoded.provider)) {
       throw new DispatchError(
         'NoUsableKeyForRequestId',
-        `request_id belongs to provider '${decoded.provider}', which has no usable keys; run "surf keys add --provider ${decoded.provider} <key>" and retry`
+        `request_id belongs to provider '${decoded.provider}', which has no usable keys; run "surf-skill keys add --provider ${decoded.provider} <key>" and retry`
       );
     }
     return { chain: [decoded.provider], pinned: true, decoded };
@@ -66,7 +66,7 @@ function buildChain(operation, state, flags) {
   if (chain.length === 0) {
     throw new DispatchError(
       'NoProviderAvailable',
-      `operation '${operation}' requires one of [${baseChain.join(', ')}]; run "surf keys add --provider <name> <key>"`
+      `operation '${operation}' requires one of [${baseChain.join(', ')}]; run "surf-skill keys add --provider <name> <key>"`
     );
   }
 

@@ -6,11 +6,11 @@
   "author": "frederico-kluser",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/frederico-kluser/tavily-skill.git"
+    "url": "git+https://github.com/frederico-kluser/surf-skill.git"
   },
-  "homepage": "https://github.com/frederico-kluser/tavily-skill#readme",
+  "homepage": "https://github.com/frederico-kluser/surf-skill#readme",
   "bugs": {
-    "url": "https://github.com/frederico-kluser/tavily-skill/issues"
+    "url": "https://github.com/frederico-kluser/surf-skill/issues"
   },
   "keywords": [
     "pi-package",
