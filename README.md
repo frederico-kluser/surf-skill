@@ -1,166 +1,274 @@
-# Tavily Skill for Pi, OpenCode, and GitHub Copilot CLI
+# surf-skill
 
-Portable Tavily-powered web search, content extraction, site crawling, URL mapping, and deep research for AI coding agents — **without MCP**.
+**One bash command. Two providers. Zero MCP.** A multi-provider web skill
+for AI coding agents that fronts **Tavily** and **Parallel AI** behind a
+single CLI (`surf-skill`). The agent calling this skill **never picks the
+provider** — `surf-skill` does, with automatic key rotation, provider
+fallback, and last-known-good persistence.
 
-This repository ships a production-ready Agent Skill at `skills/tavily/` and is also structured as a **Pi package**, so Pi users can install it directly from a git repository while other Agent Skills-compatible tools can use the same skill directory.
+```
+search ─┐
+extract ┤            ┌──▶ Tavily   (search, extract, crawl, map, research)
+crawl ──┼──▶ surf ───┤
+map  ───┤            └──▶ Parallel (search, extract, research async)
+research┘
+```
 
----
-
-## Highlights
-
-- **One skill, multiple harnesses**: Pi, OpenCode, and GitHub Copilot CLI
-- **No MCP required**: uses a normal CLI (`tvly`) through `bash`
-- **Clean default output**: Markdown-first, JSON optional
-- **Built-in cost guardrails**: commands estimated above 10 credits are blocked unless explicitly confirmed
-- **Async deep research workflow**: `research-start` + `research-poll`
-- **Local cache and usage ledger**: repeated identical calls can be free within TTL
-- **Useful offline behavior**: `tvly --help`, `tvly --version`, `tvly cost`, and `tvly cache-clear` work without an API key
-
----
-
-## Supported environments
-
-| Environment | How to use it |
+| | |
 |---|---|
-| **Pi Coding Agent** | Install as a Pi package from git, or use `skills/tavily/` directly |
-| **OpenCode** | Copy or symlink `skills/tavily/` into `.agents/skills/` or `~/.agents/skills/` |
-| **GitHub Copilot CLI** | Copy or symlink `skills/tavily/` into `.agents/skills/` or `~/.agents/skills/` |
+| **Status** | v2.0.0 |
+| **Runtime** | Node ≥ 18, bash. Zero npm deps. |
+| **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime. |
+| **Supported agents** | Claude Code · GitHub Copilot CLI · Pi Coding Agent · OpenCode · Codex CLI |
+| **Spec** | [Anthropic Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) |
 
 ---
 
-## Install
+## Quickstart (30 seconds)
+
+```bash
+git clone https://github.com/frederico-kluser/surf-skill.git
+cd surf-skill
+bash skills/surf-skill/install.sh
+surf-skill setup            # interactive wizard
+surf-skill search "your query"
+```
+
+That's it. The installer creates symlinks for all supported harnesses,
+configures their bash timeouts where possible, and seeds `keys.json` from
+`$TAVILY_API_KEY` / `$PARALLEL_API_KEY` if those env vars are set.
+
+---
+
+## Why this exists
+
+You have a Tavily key. Maybe a Parallel one too. Maybe several Tavily keys
+to spread cost across accounts. Today every agent skill is **1-to-1** with
+a provider — when a key dies or a provider has an outage, your agent loop
+breaks.
+
+`surf-skill` is a connector:
+
+- **Multi-key per provider.** Add as many keys as you want; rotation is
+  automatic on `401`/`403`/`402` (auth, insufficient credits) or persistent
+  `5xx`. Burned keys auto-reset on the first day of the next calendar
+  month (assuming monthly billing).
+- **Provider fallback.** If all Tavily keys are burned, `search`/`extract`
+  fail over to Parallel — transparently. `crawl` and `map` stay on Tavily
+  (Parallel doesn't have them). `research` defaults to Parallel first
+  because its Task API is the strongest deep-research surface.
+- **Hot-path memory.** The last successful provider/key is remembered in
+  `~/.config/surf/keys.json`. The next call starts there — no cold-start
+  cost.
+- **Predictable output.** `--json` returns the same normalized envelope
+  no matter which provider answered.
+
+---
+
+## Supported agents
+
+> The installer configures every harness it can. The user only has to
+> manually configure GitHub Copilot CLI (per project) because it has no
+> global timeout setting.
+
+### Claude Code
+
+```bash
+bash skills/surf-skill/install.sh
+# Installer writes ~/.claude/settings.json:
+#   { "env": { "BASH_DEFAULT_TIMEOUT_MS": "300000",
+#              "BASH_MAX_TIMEOUT_MS": "600000" } }
+```
+
+The skill becomes available at `~/.claude/skills/surf-skill/`. In a Claude
+Code session, just ask: "search the web for X" — the agent will invoke
+`surf-skill` via Bash. For commands that may exceed 5 min, the agent can
+pass `timeout: 600000` on the Bash call (10 min hard cap), or set
+`run_in_background: true` and monitor via `/tasks`.
+
+### GitHub Copilot CLI
+
+⚠️ **Default bash timeout is 30 s — the most fragile of the three.**
+
+```bash
+bash skills/surf-skill/install.sh
+# Symlink created at ~/.copilot/skills/ (via ~/.agents/skills/surf-skill).
+```
+
+**Per-project**, add `.github/copilot-hooks.json`:
+
+```json
+{ "timeoutSec": 300 }
+```
+
+Without this, any `surf-skill` command other than `--help`, `--version`,
+`keys list/add`, or `search --max 1` will time out. With it, you can use
+the full command set up to ~5 min per call.
+
+For longer operations, use Copilot CLI's async pattern: `/delegate` the
+`surf-skill research-start ...` call, then poll with `surf-skill
+research-poll <id>` from a regular session.
 
 ### Pi Coding Agent
 
-Once this repository is published, install it from git:
-
 ```bash
-pi install https://github.com/frederico-kluser/tavily-skill
+bash skills/surf-skill/install.sh
+# Installer writes ~/.pi/agent/settings.json:
+#   { "env": { "PI_BASH_DEFAULT_TIMEOUT_SECONDS": "300",
+#              "PI_BASH_MAX_TIMEOUT_SECONDS": "600" } }
 ```
 
-Pi packages can expose skills through the `pi.skills` manifest. This repository is already set up for that.
+The skill becomes available at `~/.pi/agent/skills/surf-skill/`. Pi reads
+the timeout from env, so the settings.json above is enough. For
+long-running work, Pi supports subagents with `--bg` and the `await` tool.
 
-### Manual install for any Agent Skills-compatible harness
+### OpenCode & Codex CLI
 
-Clone the repository and link the skill directory:
+Also auto-configured by the installer (`~/.agents/skills/surf-skill/` and
+`~/.codex/skills/surf-skill/`). OpenCode gets `mcp_timeout` + `bash.timeout_ms`
+set to 600 000 ms in `~/.config/opencode/opencode.json`.
 
-```bash
-git clone https://github.com/frederico-kluser/tavily-skill.git
-mkdir -p ~/.agents/skills
-ln -snf "$PWD/tavily-skill/skills/tavily" ~/.agents/skills/tavily
-bash ~/.agents/skills/tavily/install.sh
+---
+
+## Timeouts at a glance
+
+| Agent | Default bash | Max | After install | Most likely to time out? |
+|---|---|---|---|---|
+| **Claude Code** | 120 s | 600 s (hard) | 300 s default | Long crawls > 5 min |
+| **GitHub Copilot CLI** | **30 s** | NÃO DOCUMENTADO | unchanged (no global config) | **YES — most commands** |
+| **Pi Coding Agent** | 120 s | 600 s | 300 s default | Long crawls > 5 min |
+| **OpenCode** | varies | 600 s | 600 s default | Rarely |
+
+If you see timeouts, the order of fixes:
+
+1. Use `surf-skill research-start` + `research-poll` instead of sync
+   `research`.
+2. Reduce `--limit` / `--max` / `--max-depth`.
+3. Bump the per-harness timeout (see the relevant card above).
+4. Set `SURF_TIMEOUT_MS=300000` (caps the HTTP request itself at 5 min).
+
+---
+
+## Commands
+
+| Command | What it does | Provider(s) |
+|---|---|---|
+| `setup` | Interactive wizard to add keys (TTY) | n/a |
+| `search <query>` | Web search | tavily, parallel |
+| `extract <url> ...` | Pull markdown from URLs | tavily, parallel |
+| `crawl <url>` | Recursive site crawl | tavily |
+| `map <url>` | Sitemap discovery | tavily |
+| `research <topic>` | Sync deep research (50 s budget) | parallel, tavily |
+| `research-start <topic>` | Start async research | parallel, tavily |
+| `research-poll <id>` | Poll an async research job | (sticky to provider) |
+| `usage --provider <name>` | Provider's usage endpoint | per provider |
+| `cache-clear` | Purge response cache | n/a |
+| `cost [--reset]` | Local credit ledger (per-provider) | n/a |
+| `keys <subcmd>` | `add`, `remove`, `list`, `reset`, `clear` | n/a |
+
+Full reference: `skills/surf-skill/SKILL.md`.
+
+Global flags every command accepts:
+
 ```
-
-If you prefer copying instead of symlinking:
-
-```bash
-mkdir -p ~/.agents/skills
-cp -R tavily-skill/skills/tavily ~/.agents/skills/tavily
-bash ~/.agents/skills/tavily/install.sh
-```
-
-### Project-local install
-
-Put the skill directory in a repository at:
-
-```bash
-.agents/skills/tavily/
+--provider <tavily|parallel>   Force provider (disables fallback)
+--no-fallback                  Keep default provider, no cross-provider fallback
+--no-cache                     Skip response cache
+--json                         Normalized envelope as JSON
+--raw-json                     Raw provider response (bypasses cache)
+--confirm-expensive            Allow operations estimated > 10 credits
 ```
 
 ---
 
-## Requirements
+## Multi-key & fallback
 
-- **Node.js 18+**
-- **bash**
-- **`TAVILY_API_KEY`** environment variable
-- **Optional:** `jq` for research examples that extract `request_id` from JSON
+```
+state.json (per provider):
+  keys:       [key0, key1, key2]
+  current:    1                       ← starts here next call
+  burned:     [{ index: 0, reason: "401", at: "2026-05-15..." }]
+                                      ← auto-reset on the 1st of next month
 
-Configure Tavily:
-
-```bash
-export TAVILY_API_KEY=tvly-...
+call flow:
+  ┌─ load state, auto-reset burned ──┐
+  │                                  │
+  └─▶ chain = [last_ok_provider,    ─┤
+              ...rest_of_capability_chain]
+                                     │
+  for provider in chain:             │
+    for key in usable_keys(provider):│
+      try call                       │
+        200 ─▶ save last_ok, return  │
+        401/403/402 ─▶ burn key, next│
+        5xx x3 ─▶ burn key, next     │
+        429 ─▶ backoff, retry        │
+        4xx ─▶ raise (no fallback)   │
+    (no usable keys) ─▶ next provider│
+  raise AllProvidersExhausted ───────┘
 ```
 
-Smoke test:
+Force a specific provider for debugging:
 
 ```bash
-tvly --version
-tvly search "tavily api hello world" --max 1
-```
-
----
-
-## What the skill provides
-
-The `tavily` skill exposes the main Tavily workflows through a single `tvly` CLI:
-
-- `search`
-- `extract`
-- `crawl`
-- `map`
-- `research-start`
-- `research-poll`
-- `research`
-- `usage`
-- local `cost` tracking
-
----
-
-## Usage examples
-
-### Search
-
-```bash
-tvly search "latest JavaScript framework trends" --depth basic --max 5
-```
-
-### Extract known URLs
-
-```bash
-tvly extract https://docs.tavily.com/documentation/api-reference/introduction
-```
-
-### Map a documentation site
-
-```bash
-tvly map https://docs.tavily.com --limit 50
-```
-
-### Crawl a focused subset of a site
-
-```bash
-tvly crawl https://docs.tavily.com \
-  --select-paths "/documentation/.*" \
-  --exclude-paths "/blog/.*" \
-  --chunks 3
-```
-
-### Start deep research
-
-```bash
-JOB=$(tvly research-start "compare search APIs for coding agents" --model pro --confirm-expensive --json | jq -r .request_id)
-tvly research-poll "$JOB"
-```
-
-### Inspect local usage
-
-```bash
-tvly cost
-tvly cost --json
-tvly cost --reset
+surf-skill search "x" --provider parallel
+# 'parallel' fails ⇒ command fails (no fallback when --provider is set)
 ```
 
 ---
 
-## Cost and safety behavior
+## Onboarding (3 ways)
 
-- **Start cheap by default**: the skill is designed around `basic` search depth and small result sets first
-- **Guardrails for expensive calls**: commands estimated above 10 credits require `--confirm-expensive` or `TAVILY_ALLOW_EXPENSIVE=1`
-- **Synchronous `pro` research is blocked**: use `research-start` + `research-poll`
-- **Cache enabled by default**: local response cache lives in `~/.cache/tavily-skill/`
-- **Usage ledger enabled**: local usage history is stored in `~/.cache/tavily-skill/usage.jsonl`
-- **Web content is treated as untrusted input**: the skill prints results, it does not execute page content
+```bash
+# 1. Wizard (recommended in a TTY)
+surf-skill setup
+
+# 2. Direct
+surf-skill keys add --provider tavily tvly-...
+surf-skill keys add --provider parallel <key>
+
+# 3. Env import on first install only
+TAVILY_API_KEY=tvly-... PARALLEL_API_KEY=... bash skills/surf-skill/install.sh
+# After import, the installer prints a note asking you to remove the env
+# vars from your shell rc — surf-skill never reads them at runtime.
+```
+
+Inspect what was stored (keys are masked):
+
+```bash
+surf-skill keys list
+# **Surf keys** (config: ~/.config/surf/keys.json)
+# last_ok_provider: `tavily`
+# ## tavily (2 keys)
+# - [0] tvly-…ab12  *(current)*
+# - [1] tvly-…cd34
+```
+
+---
+
+## Troubleshooting
+
+**`❌ Error [NoProviderAvailable]: operation 'X' requires one of [...]`**
+→ The op needs a key for a provider you haven't configured. In a TTY the
+error already suggests `surf-skill setup`. Outside TTY, run
+`surf-skill keys add --provider <name> <key>`.
+
+**`❌ Error [AllProvidersExhausted]: ...`**
+→ Every key on every eligible provider failed. Check `surf-skill keys list`
+— if everything is `burned`, you've either rotated keys mid-billing-cycle
+or the providers are down. Run `surf-skill keys reset` to retry.
+
+**Command timed out in GH Copilot CLI**
+→ Add `.github/copilot-hooks.json` with `{ "timeoutSec": 300 }` to the
+project. See the Copilot CLI card above.
+
+**`❌ Error: EXPENSIVE_BLOCKED ...`**
+→ Pass `--confirm-expensive` after confirming the cost with the user. Or
+export `SURF_ALLOW_EXPENSIVE=1` for the session.
+
+**`Refusing sync research with model=pro`**
+→ Use `surf-skill research-start --model pro ...` then `surf-skill
+research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
@@ -169,30 +277,51 @@ tvly cost --reset
 ```text
 .
 ├── package.json
-├── README.md
+├── README.md           ← you're here
+├── CHANGELOG-v2.md
 ├── LICENSE
 └── skills/
-    └── tavily/
+    └── surf-skill/
         ├── SKILL.md
         ├── install.sh
         ├── bin/
-        │   └── tvly.mjs
+        │   └── surf-skill.mjs
+        ├── lib/
+        │   ├── state.mjs          ← keys.json I/O, monthly auto-reset
+        │   ├── cache.mjs          ← TTL response cache
+        │   ├── audit.mjs          ← audit + usage JSONL
+        │   ├── flags.mjs          ← parsing + helpers
+        │   ├── cost.mjs           ← estimateCredits + guard
+        │   ├── format.mjs         ← markdown formatters
+        │   ├── dispatch.mjs       ← provider/key fallback engine
+        │   ├── keys-cmd.mjs       ← surf-skill keys add/remove/...
+        │   ├── setup.mjs          ← interactive onboarding
+        │   └── providers/
+        │       ├── index.mjs
+        │       ├── tavily.mjs
+        │       └── parallel.mjs
         └── references/
-            ├── COSTS.md
-            └── ENDPOINTS.md
+            ├── tavily-api.md
+            ├── parallel-api.md
+            └── COSTS.md
 ```
 
 ---
 
 ## Security
 
-- This repository contains **no real API keys**
-- Never commit `TAVILY_API_KEY` values
-- The installer only uses placeholders such as `tvly-...`
-- Review any skill before installing, since skills can instruct agents to run commands
+- This repository contains **no real API keys**. The installer only uses
+  placeholders.
+- Keys are stored exclusively in `~/.config/surf/keys.json` (chmod 600).
+  `surf-skill` does not read keys from env at runtime.
+- The audit log records only `provider` name and key **index**, never the
+  key itself. `surf-skill keys list` masks every key (`tvly-…ab12`).
+- The skill never executes content returned from the web — it just prints it.
+- Review any skill before installing. Skills can instruct agents to run
+  commands.
 
 ---
 
 ## License
 
-MIT
+MIT.
