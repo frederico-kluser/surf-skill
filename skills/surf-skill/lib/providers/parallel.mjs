@@ -97,8 +97,21 @@ function extractMessage(body) {
   if (!body) return '';
   if (body.error) {
     if (typeof body.error === 'string') return body.error;
-    if (body.error.message) return body.error.message;
-    if (body.error.detail) return flat(body.error.detail);
+    const parts = [];
+    if (body.error.message) parts.push(body.error.message);
+    // Parallel returns detailed validation errors at body.error.detail.errors[]
+    // with shape { type, loc: ["body","field"], msg, input }. Surface them so
+    // schema mismatches are debuggable without --raw-json.
+    const errs = body.error.detail && body.error.detail.errors;
+    if (Array.isArray(errs) && errs.length) {
+      for (const e of errs) {
+        const loc = Array.isArray(e.loc) ? e.loc.join('.') : '';
+        parts.push(`${loc}: ${e.msg}`);
+      }
+    } else if (body.error.detail) {
+      parts.push(flat(body.error.detail));
+    }
+    return parts.filter(Boolean).join(' — ');
   }
   return flat(body.message) || flat(body.detail) || '';
 }
@@ -141,17 +154,16 @@ async function search(args, ctx) {
     : (args.query ? [args.query] : []);
   if (!queries.length) throw Object.assign(new Error('search requires query or --queries'), { kind: 'caller_4xx', statusCode: 400 });
 
-  const processor = args.processor || DEPTH_TO_PROCESSOR[args.depth || 'basic'] || 'lite';
-  const body = compactObject({
+  // Parallel POST /v1/search currently accepts ONLY { objective, search_queries }.
+  // Any other field (processor, max_results, source_policy, ...) is rejected
+  // with "Extra inputs are not permitted". Tavily-only knobs like --depth,
+  // --max, --domains are silently ignored on this provider — that's expected.
+  // Verified against api.parallel.ai 2026-05-20; if Parallel expands the
+  // schema later, add fields here.
+  const body = {
     objective: args.objective || args.query || queries[0],
     search_queries: queries,
-    processor,
-    max_results: clamp(Number(args.max) || 5, 1, 20),
-    source_policy: args.domains || args.excludeDomains ? {
-      include_domains: splitList(args.domains),
-      exclude_domains: splitList(args.excludeDomains),
-    } : undefined,
-  });
+  };
 
   const { status, ok, data, latency_ms } = await doFetch('/v1/search', body, ctx);
   if (!ok) throw asError(status, data);

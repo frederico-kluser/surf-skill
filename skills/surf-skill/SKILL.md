@@ -4,7 +4,7 @@ description: Web search, content extraction, site crawl, URL mapping, and deep r
 license: MIT
 allowed-tools: bash
 metadata:
-  version: "2.2.0"
+  version: "2.2.1"
   requires: "node>=18; keys configured via 'surf-skill setup' or 'surf-skill keys add'; per-project bash timeout via 'surf-skill project-config'"
 ---
 
