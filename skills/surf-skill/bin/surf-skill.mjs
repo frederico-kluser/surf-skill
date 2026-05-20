@@ -11,15 +11,35 @@ import { cacheClear } from '../lib/cache.mjs';
 import { readUsage, USAGE_LOG } from '../lib/audit.mjs';
 import { migrateLegacy } from '../lib/state.mjs';
 import { runSetup } from '../lib/setup.mjs';
+import { runProjectConfig, formatProjectConfigResult } from '../lib/project-config.mjs';
 import { providerFromRequestId } from '../lib/providers/index.mjs';
 
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
+
+// Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
+// instead of dying silently. This is defense-in-depth: dispatch already
+// tries to abort early via the self-budget check.
+for (const sig of ['SIGTERM', 'SIGINT']) {
+  process.on(sig, () => {
+    process.stderr.write(
+      `❌ Error [KilledBySignal]: surf-skill received ${sig}. ` +
+      `If this came from the agent's bash timeout, run 'surf-skill project-config' ` +
+      `in this project to raise the limit, or use 'research-start' + 'research-poll' for long jobs.\n`
+    );
+    process.exit(143); // 128 + 15 (SIGTERM convention)
+  });
+}
 
 const HELP = `surf-skill — multi-provider web skill (Tavily + Parallel AI)
 
 Commands:
   setup                       Interactive onboarding wizard (TTY required)
-  search <query>              Web search
+  project-config [--harness <copilot|claude|pi|all>] [--yes]
+                              Write per-project bash-timeout config so the
+                              harness used in this project doesn't kill us.
+                              Auto-detects via .github/, .claude/, .pi/.
+                              REQUIRED for GH Copilot CLI projects.
+  search <query>              Web search (default depth: advanced)
   extract <url> [url ...]     Fetch & extract content from URLs
   crawl <url>                 Crawl a site (Tavily only)
   map <url>                   Discover URLs on a site (Tavily only)
@@ -86,7 +106,7 @@ async function cmdSearch(pos, flags) {
   if (!query) die('Usage: surf-skill search "query" [flags]');
   const args = {
     query,
-    depth: flags.depth || 'basic',
+    depth: flags.depth || 'advanced',
     max: flags.max,
     topic: flags.topic,
     time: flags.time,
@@ -345,6 +365,11 @@ try {
     case 'cost': await cmdCost(pos, flags); break;
     case 'keys': await cmdKeys(pos, flags); break;
     case 'setup': await runSetup(); break;
+    case 'project-config': {
+      const result = await runProjectConfig(pos, flags);
+      out(formatProjectConfigResult(result, { json: !!flags.json }));
+      break;
+    }
     default:
       die(`Unknown command: ${cmd}. Try 'surf-skill --help'.`);
   }
@@ -355,6 +380,10 @@ try {
       process.stderr.write(`→ Run 'surf-skill setup' to configure keys interactively.\n`);
     }
     process.exit(1);
+  }
+  if (e.code === 'PROJECT_CONFIG_NO_TTY' || e.code === 'PROJECT_CONFIG_BAD_HARNESS') {
+    process.stderr.write(`❌ Error: ${e.message}\n`);
+    process.exit(2);
   }
   if (e.code === 'NO_TTY') {
     process.stderr.write(`❌ Error: ${e.message}\n`);

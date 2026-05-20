@@ -25,6 +25,13 @@ const CHEAT_SHEET = `
 Add another key later with:
   surf-skill keys add --provider <tavily|parallel> <key>
 
+🛠  IMPORTANT — in each project where you'll use surf-skill, run:
+      surf-skill project-config
+   This raises the per-project bash timeout for the harness in that repo.
+
+⚠  GitHub Copilot CLI users: this step is REQUIRED. Copilot's default bash
+   timeout is 30s and surf-skill needs more (most commands run 3–60s).
+
 Docs: ~/.agents/skills/surf-skill/SKILL.md
 `;
 

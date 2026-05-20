@@ -4,8 +4,8 @@ description: Web search, content extraction, site crawl, URL mapping, and deep r
 license: MIT
 allowed-tools: bash
 metadata:
-  version: "2.0.0"
-  requires: "node>=18; keys configured via 'surf-skill setup' or 'surf-skill keys add'"
+  version: "2.1.0"
+  requires: "node>=18; keys configured via 'surf-skill setup' or 'surf-skill keys add'; per-project bash timeout via 'surf-skill project-config'"
 ---
 
 # surf-skill — multi-provider web access for AI agents
@@ -78,7 +78,12 @@ rest is up to the agent.
 |---|---|---|---|
 | **Claude Code** | 120 s | 600 s (hard limit) | OK after install (raises default to 300 s via `~/.claude/settings.json`). For commands > 300 s, pass `timeout: 600000` on the Bash call, or use `run_in_background: true`. |
 | **Pi Coding Agent** | 120 s | 600 s | OK after install (raises default to 300 s via `~/.pi/agent/settings.json`). |
-| **GH Copilot CLI** | **30 s** | not documented | **Most fragile.** The user must add `.github/copilot-hooks.json` with `{ "timeoutSec": 300 }` per project. Without that, ANY surf-skill command other than `--help`, `keys list/add`, or `search --max 1` will time out. |
+| **GH Copilot CLI** | **30 s** | not documented | **Most fragile.** The user must run `surf-skill project-config` (or add `.github/copilot-hooks.json` with `{ "timeoutSec": 300 }`) per project. Without that, ANY surf-skill command other than `--help`, `keys list/add`, or `search --max 1` will time out. |
+
+**Recommended for every new project**: `surf-skill project-config` auto-detects
+the harness (via `.github/`, `.claude/`, `.pi/`) and writes the right config
+(`.github/copilot-hooks.json`, `.claude/settings.local.json`, `.pi/settings.json`)
+to raise the bash tool timeout to 300 s where supported.
 
 ### Long-running operations — guidance for the agent
 
@@ -102,7 +107,11 @@ correct mitigation from the table above.
 # Onboarding
 surf-skill setup                        # interactive wizard (TTY)
 
-# 1) Search — 1-2 credits per call
+# Per-project setup (REQUIRED for GH Copilot CLI)
+surf-skill project-config              # auto-detect + write config in cwd
+surf-skill project-config --harness copilot --yes  # force a specific harness
+
+# 1) Search — 1-2 credits per call (default depth is now `advanced`)
 surf-skill search "query" [--depth basic|advanced] [--topic general|news|finance] \
                           [--time day|week|month|year] [--max 5] \
                           [--domains arxiv.org,github.com] [--exclude reddit.com] \
@@ -150,8 +159,9 @@ normalized response envelope (predictable shape across providers) or
 
 1. **Don't pass `--provider`.** Let the connector decide. Only use it for
    debugging a specific provider.
-2. **Start cheap.** Always begin with `--depth basic` and `--max 3` or `--max 5`.
-   Escalate to `advanced` only if results are thin.
+2. **Default is `--depth advanced`** (better quality, ~3–10 s, 2 credits/call).
+   Pass `--depth basic` only when the user explicitly wants the cheapest /
+   fastest path (1–3 s, 1 credit). Always start with `--max 3` or `--max 5`.
 3. **Cite every fact** with the URL returned by the skill: `[N] Title — https://...`.
 4. **Never call `surf-skill` in a loop** to paginate. Increase `--max` once
    instead (max 20).
@@ -206,6 +216,12 @@ user verbatim — do not retry blindly.** Common cases:
 - `AllProvidersExhausted` → every key on every eligible provider failed.
   Show `surf-skill keys list` and escalate.
 - `EXPENSIVE_BLOCKED` → ask user, then re-run with `--confirm-expensive`.
+- `LikelyAgentTimeout: Operation would likely exceed the agent's bash timeout` →
+  surf-skill detected (from env vars) that the harness will kill the call before
+  it can finish. Tell the user: **"Run `surf-skill project-config` in this project
+  to raise the bash timeout limit."** Do NOT retry the same call without that fix.
+- `KilledBySignal: surf-skill received SIGTERM/SIGINT` → the harness killed us
+  mid-flight. Same mitigation as `LikelyAgentTimeout`.
 
 ## Security
 

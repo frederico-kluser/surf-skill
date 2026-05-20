@@ -213,3 +213,8 @@ echo "   pi              → ask 'search the web for X'"
 echo "   opencode        → same"
 echo "   claude          → same"
 echo "   copilot         → /skills info surf-skill   then ask 'search the web for X'"
+echo
+echo "🛠  In each project where you'll use surf-skill, run:"
+echo "      surf-skill project-config"
+echo "    This raises the per-project bash timeout for the harness in that repo."
+echo "    REQUIRED for GH Copilot CLI projects (default timeout is 30s)."
