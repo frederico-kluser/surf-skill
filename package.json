@@ -1,7 +1,7 @@
 {
-  "name": "pi-tavily-skill",
-  "version": "1.1.0",
-  "description": "Tavily Agent Skill for Pi Coding Agent, OpenCode, and GitHub Copilot CLI.",
+  "name": "surf-skill",
+  "version": "2.0.0",
+  "description": "Multi-provider web skill (Tavily + Parallel AI) for Pi, OpenCode, Claude Code, Codex CLI, and GitHub Copilot CLI. Automatic provider fallback + multi-key rotation.",
   "license": "MIT",
   "author": "frederico-kluser",
   "repository": {
@@ -16,6 +16,9 @@
     "pi-package",
     "agent-skill",
     "tavily",
+    "parallel-ai",
+    "web-search",
+    "connector",
     "pi-coding-agent"
   ],
   "engines": {
