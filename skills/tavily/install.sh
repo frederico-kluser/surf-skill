@@ -31,13 +31,25 @@ EOF
   echo "✓ added ~/.local/bin to PATH in $SHELL_RC"
 fi
 
-# 4) Compatibility symlinks for every agent we know about
+# 4) Compatibility symlinks — minimum set needed for full coverage.
+#
+#    Empirically verified against each harness's official docs:
+#      * OpenCode reads ~/.agents/skills/, ~/.claude/skills/, ~/.config/opencode/skills/
+#      * GH Copilot CLI reads ~/.copilot/skills/ OR ~/.agents/skills/
+#      * Claude Code reads ONLY ~/.claude/skills/
+#      * Codex CLI reads ONLY ~/.codex/skills/
+#      * Pi reads ONLY ~/.pi/agent/skills/ (others must be opted-in via settings)
+#
+#    So ~/.agents/skills/ alone is insufficient (it misses Claude/Codex/Pi),
+#    but we only need 4 dirs total: the canonical one + the 3 harnesses that
+#    refuse to look elsewhere. Adding dirs for Gemini, Cursor, Crush, Windsurf,
+#    Cline, Continue, Aider, etc. is pointless — they don't implement the
+#    Agent Skills spec (they use MCP or proprietary rule files).
 for dir in \
-  "$HOME/.claude/skills" \
-  "$HOME/.copilot/skills" \
-  "$HOME/.config/opencode/skills" \
-  "$HOME/.pi/agent/skills" \
-  "$HOME/.codex/skills"
+  "$HOME/.agents/skills"     `# Canonical: serves OpenCode + GH Copilot CLI` \
+  "$HOME/.claude/skills"     `# Anthropic Claude Code (own path required)` \
+  "$HOME/.codex/skills"      `# OpenAI Codex CLI (own path required)` \
+  "$HOME/.pi/agent/skills"   `# Pi Coding Agent (own path required by default)`
 do
   mkdir -p "$dir"
   ln -snf "$SKILL_DIR" "$dir/tavily"
