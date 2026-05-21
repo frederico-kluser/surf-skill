@@ -1,5 +1,46 @@
 # Changelog
 
+## v2.1.1 — Robust key rotation: Brave 422 now burns the key
+
+### Bug
+
+When a Brave key was malformed (wrong length/charset), the API returns
+HTTP **422** rather than 401. v2.1.0 classified 422 as `caller_4xx`, which
+made dispatch throw without burning the key or trying the next one. That
+violated the cross-provider fallback contract: a single bad-format key
+could short-circuit the chain instead of rotating.
+
+### Fix
+
+`src/lib/providers/brave.mjs::mapError` now classifies 422 as `auth`
+(burn key, rotate). The trade-off:
+
+- **Real malformed token** → burns the key, dispatch tries the next key
+  (or next provider if `--provider` not set). The user gets a result.
+- **Genuinely bad query param** → all keys fail with 422; surfaces as
+  `AllProvidersExhausted` with a hint, still actionable.
+
+### Verified
+
+Re-ran the 3 fallback tests with v2.1.1:
+
+- T1 same-provider rotation (tavily key #0 bad → key #1 succeeds): ✓
+- T2 cross-provider fallback (tavily/parallel both 401 → brave 200): ✓
+- T3 all keys bad incl. malformed Brave: **now burns Brave key + reports
+  AllProvidersExhausted** (instead of throwing on the 422)
+
+### Also fixed
+
+- `src/lib/dispatch.mjs::VERSION` was stuck at `1.0.0` since the initial
+  release; bumped to `2.1.1` so the `X-Client-Name` header surfaces
+  the correct CLI version to providers.
+- `SKILL.md::metadata.version` was missed in the v2.1.0 bump (still
+  showed `2.0.0`); now `2.1.1`.
+
+No breaking changes.
+
+---
+
 ## v2.1.0 — Brave Search as 3rd provider + `--mode` flag
 
 ### What's new

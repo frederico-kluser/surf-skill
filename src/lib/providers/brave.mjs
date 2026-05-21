@@ -90,7 +90,13 @@ function mapError(status, body) {
   if (status === 401) return { kind: 'auth', statusCode: status, message: 'invalid Brave key' };
   if (status === 402) return { kind: 'auth', statusCode: status, message: msg || 'Brave: insufficient credits / billing required' };
   if (status === 403) return { kind: 'auth', statusCode: status, message: msg || 'forbidden (plan/billing)' };
-  if (status === 422) return { kind: 'caller_4xx', statusCode: status, message: msg || 'invalid params' };
+  // Brave returns 422 for several reasons: malformed token (length/charset
+  // wrong, fails BEFORE auth check), OR bad query params. We classify 422 as
+  // `auth` so the key gets burned and dispatch rotates. The trade-off: a
+  // genuinely-bad query param will fail across ALL keys and surface as
+  // AllProvidersExhausted, still actionable. A malformed token is the
+  // dominant cause in practice (real tokens hit 401 instead).
+  if (status === 422) return { kind: 'auth', statusCode: status, message: msg || 'Brave: malformed token or invalid params (key rotation will retry; if all keys fail, you likely have a bad query)' };
   if (status === 429) return { kind: 'rate_limit_429', statusCode: status, message: msg || 'Brave rate limit (50 RPS search)' };
   if (status >= 500)  return { kind: 'server_5xx', statusCode: status, message: msg || 'Brave server error' };
   if (status >= 400)  return { kind: 'caller_4xx', statusCode: status, message: msg || `HTTP ${status}` };
