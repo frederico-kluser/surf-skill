@@ -2,6 +2,7 @@
 // `surf-skill keys add` directly.
 //
 // Multi-key: prompts for N keys per provider (Enter to finish that provider).
+// 3 providers: Tavily, Parallel, Brave.
 
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
@@ -13,24 +14,26 @@ const BANNER = `
 │ (Enter empty to finish a provider; Enter twice in a row to
 │ skip it entirely).
 │
-│ Tavily:    https://app.tavily.com    (1,000 free credits/mo)
+│ Tavily:    https://app.tavily.com                       (1,000 free credits/mo)
 │ Parallel:  https://platform.parallel.ai
+│ Brave:     https://api-dashboard.search.brave.com       ($5/mo credit, metered)
 │
 │ Keys live in ${KEYS_FILE} (chmod 600).
 └──────────────────────────────────────────────────────────
 `;
 
 const CHEAT_SHEET_TPL = (counts) => `
-✓ Saved ${counts.tav} Tavily key${counts.tav === 1 ? '' : 's'}, ${counts.par} Parallel key${counts.par === 1 ? '' : 's'}.
+✓ Saved. Now have ${counts.tav} Tavily key${counts.tav === 1 ? '' : 's'}, ${counts.par} Parallel key${counts.par === 1 ? '' : 's'}, ${counts.brv} Brave key${counts.brv === 1 ? '' : 's'}.
 
 Try one of:
   surf-skill search "your query"
-  surf-skill search "q1" "q2" "q3"      # batch (N queries)
+  surf-skill search "q1" "q2" "q3"                # batch (N queries)
+  surf-skill search "x" --provider brave --mode fast
   surf-skill extract https://example.com
   surf-skill keys list
 
 Add another key later with:
-  surf-skill keys add --provider <tavily|parallel> <key>
+  surf-skill keys add --provider <tavily|parallel|brave> <key>
 
 🛠  IMPORTANT — in each project where you'll use surf-skill, run:
       surf-skill project-config
@@ -72,7 +75,8 @@ export async function runSetup() {
   if (!stdin.isTTY) {
     const err = new Error(`'setup' requires a TTY. Use:
   surf-skill keys add --provider tavily <key>
-  surf-skill keys add --provider parallel <key>`);
+  surf-skill keys add --provider parallel <key>
+  surf-skill keys add --provider brave <key>`);
     err.code = 'NO_TTY';
     throw err;
   }
@@ -83,29 +87,39 @@ export async function runSetup() {
   const rl = readline.createInterface({ input: stdin, output: stdout });
   let newTav = [];
   let newPar = [];
+  let newBrv = [];
   try {
     newTav = await promptKeys(rl, 'Tavily', state.tavily.keys);
     stdout.write('\n');
     newPar = await promptKeys(rl, 'Parallel', state.parallel.keys);
+    stdout.write('\n');
+    newBrv = await promptKeys(rl, 'Brave', state.brave.keys);
   } finally {
     rl.close();
   }
 
-  if (!newTav.length && !newPar.length) {
+  if (!newTav.length && !newPar.length && !newBrv.length) {
     stdout.write('\nNo new keys provided. Rerun with: surf-skill setup\n');
-    return { addedTavily: 0, addedParallel: 0 };
+    return { addedTavily: 0, addedParallel: 0, addedBrave: 0 };
   }
 
   for (const k of newTav) state.tavily.keys.push(k);
   for (const k of newPar) state.parallel.keys.push(k);
+  for (const k of newBrv) state.brave.keys.push(k);
   if (state.tavily.keys.length && state.tavily.current >= state.tavily.keys.length) state.tavily.current = 0;
   if (state.parallel.keys.length && state.parallel.current >= state.parallel.keys.length) state.parallel.current = 0;
+  if (state.brave.keys.length && state.brave.current >= state.brave.keys.length) state.brave.current = 0;
 
   await saveStateAtomic(state);
 
   stdout.write(CHEAT_SHEET_TPL({
     tav: state.tavily.keys.length,
     par: state.parallel.keys.length,
+    brv: state.brave.keys.length,
   }));
-  return { addedTavily: newTav.length, addedParallel: newPar.length };
+  return {
+    addedTavily: newTav.length,
+    addedParallel: newPar.length,
+    addedBrave: newBrv.length,
+  };
 }

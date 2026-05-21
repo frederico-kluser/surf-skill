@@ -1,7 +1,7 @@
 {
   "name": "surf-skill",
-  "version": "2.0.0",
-  "description": "Multi-provider web skill (Tavily + Parallel AI) for AI coding agents — CLI + Node library + Anthropic Agent Skill. Auto-fallback, multi-key rotation, per-project timeout config.",
+  "version": "2.1.0",
+  "description": "Multi-provider web skill (Tavily + Parallel AI + Brave Search) for AI coding agents — CLI + Node library + Anthropic Agent Skill. Auto-fallback, multi-key rotation, --mode tiers, per-project timeout config.",
   "type": "module",
   "main": "./src/index.mjs",
   "exports": {
@@ -32,6 +32,7 @@
     "agent-skill",
     "tavily",
     "parallel-ai",
+    "brave-search",
     "web-search",
     "connector",
     "claude-code",

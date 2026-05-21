@@ -15,7 +15,7 @@ import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -54,7 +54,12 @@ Commands:
   keys <add|remove|list|reset|clear> [...]
 
 Global flags:
-  --provider <tavily|parallel>   Force provider, disables fallback
+  --provider <tavily|parallel|brave>  Force provider, disables fallback
+  --mode <fast|normal|slow>      Search tier (per-provider mapping):
+                                   fast   = Tavily depth=fast   / Brave count=5
+                                   normal = Tavily depth=basic  / Brave count=10 (default)
+                                   slow   = Tavily depth=advanced / Brave count=20
+                                   Parallel ignores (single mode).
   --no-fallback                  Stay on default provider, no cross-provider fallback
   --no-cache                     Skip response cache
   --json                         Print normalized envelope as JSON
@@ -112,9 +117,13 @@ function emitResult(envelope, flags) {
 }
 
 function buildSearchArgs(query, flags) {
+  // --mode is the canonical flag. --depth (Tavily-ism) is still accepted as
+  // legacy alias; if neither is set, default to depth='advanced' (Tavily) which
+  // also resolves to mode='slow' on Brave.
   return {
     query,
-    depth: flags.depth || 'advanced',
+    mode: flags.mode,
+    depth: flags.depth || (flags.mode ? undefined : 'advanced'),
     max: flags.max,
     topic: flags.topic,
     time: flags.time,

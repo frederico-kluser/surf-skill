@@ -39,6 +39,7 @@ Or non-interactive:
 ```bash
 surf-skill keys add --provider tavily tvly-...
 surf-skill keys add --provider parallel <key>
+surf-skill keys add --provider brave <key>
 ```
 
 Keys live in `~/.config/surf/keys.json` (chmod 600) — never read from env at
@@ -52,20 +53,33 @@ The connector decides which provider to call based on:
 3. Which keys are healthy (`burned` keys are skipped, auto-reset monthly).
 
 Force a specific provider **only for debugging** with
-`--provider tavily|parallel`. That disables fallback — failure means failure.
+`--provider tavily|parallel|brave`. That disables fallback — failure means failure.
 
 ## Capability table
 
-| Operation | Tavily | Parallel | Default order |
-|---|---|---|---|
-| `search` | ✓ | ✓ | tavily → parallel |
-| `extract` | ✓ | ✓ | tavily → parallel |
-| `crawl` | ✓ | ✗ | tavily only |
-| `map` | ✓ | ✗ | tavily only |
-| `research-start` / `research` | ✓ | ✓ | parallel → tavily |
-| `research-poll` | by `request_id` prefix | by `request_id` prefix | sticky |
+| Operation | Tavily | Parallel | Brave | Default order |
+|---|---|---|---|---|
+| `search` | ✓ | ✓ | ✓ | tavily → parallel → brave |
+| `extract` | ✓ | ✓ | ✗ | tavily → parallel |
+| `crawl` | ✓ | ✗ | ✗ | tavily only |
+| `map` | ✓ | ✗ | ✗ | tavily only |
+| `research-start` / `research` | ✓ | ✓ | ✗ | parallel → tavily |
+| `research-poll` | by `request_id` prefix | by `request_id` prefix | (n/a) | sticky |
 
 When `last_ok_provider` is in the chain, it is promoted to the front.
+
+## Search modes (`--mode`)
+
+`--mode <fast|normal|slow>` is the canonical search-tier flag. Each provider
+maps it differently:
+
+| Mode | Tavily | Parallel | Brave |
+|---|---|---|---|
+| `fast`   | `search_depth=fast` (1 credit, ~1-3 s) | (ignored) | `count=5`  (5 results, fastest) |
+| `normal` (default) | `search_depth=basic` (1 credit, ~2 s) | `/v1/search` | `count=10` (10 results) |
+| `slow`   | `search_depth=advanced` (2 credits, ~5 s) | (ignored) | `count=20` (20 results) |
+
+`--depth basic|advanced` continues to work as a legacy alias for Tavily users.
 
 ## Timeouts per harness — IMPORTANT
 
@@ -143,6 +157,7 @@ surf-skill research "narrow question" --model mini --confirm-expensive
 # Keys management
 surf-skill keys add --provider tavily tvly-...
 surf-skill keys add --provider parallel <key>
+surf-skill keys add --provider brave <key>
 surf-skill keys list
 surf-skill keys remove --provider tavily 0
 surf-skill keys reset                    # un-burn all keys
