@@ -1,5 +1,81 @@
 # Changelog
 
+## v2.0.0 — npm package, cross-OS install, library mode
+
+### What's new
+
+- **One-liner cross-OS install via npm.** `npm i -g surf-skill` works on
+  Linux, macOS, and Windows. Postinstall script creates symlinks into all
+  4 supported agent harnesses (Claude Code, OpenCode, Codex CLI, Pi
+  Coding Agent), initializes `~/.config/surf/keys.json`, and cleans up
+  legacy symlinks from prior versions. Falls back to recursive copy on
+  Windows without Developer Mode.
+- **Library mode for Node / Next.js / Express.** Import named functions:
+  ```js
+  import { search, extract, research } from 'surf-skill';
+  const r = await search('claude api', { max: 3 });
+  ```
+  Auto-discovers keys from `opts → process.env → .env → ~/.config/surf/keys.json`
+  (each level can contribute; results merged + deduped).
+- **Multi-key wizard.** `surf-skill setup` now prompts for N keys per
+  provider (Enter empty to finish that provider). Add 1+ Tavily + 1+
+  Parallel keys in one pass.
+- **Auto-wizard on first TTY use.** Running any command that needs keys
+  in a TTY with empty config auto-launches the wizard, then resumes the
+  command. CI/non-TTY behavior unchanged (clear actionable error).
+- **Batch search in the library too.** `search(['q1', 'q2', 'q3'], opts)`
+  returns `{ summary, data: { batches } }` — same shape as CLI batch.
+
+### Breaking changes
+
+- **Distribution moved from `git clone + install.sh` to `npm i -g`.**
+  If you installed via the old `install.sh`:
+  ```bash
+  # Remove old install
+  rm -f ~/.local/bin/surf-skill
+  rm -rf ~/.agents/skills/surf-skill ~/.claude/skills/surf-skill \
+         ~/.codex/skills/surf-skill ~/.pi/agent/skills/surf-skill
+  # Install via npm
+  npm i -g surf-skill
+  # Your ~/.config/surf/keys.json is preserved.
+  surf-skill keys list
+  ```
+- **Repo layout**: `skills/surf-skill/*` moved to root. The package now
+  lives directly at the repo root for npm publishing. The `install.sh`
+  script is gone (replaced by `src/install/postinstall.mjs`).
+- **Package name** unchanged (`surf-skill`).
+- **CLI surface unchanged** — all commands, flags, and behavior identical.
+- **State location unchanged** — `~/.config/surf/keys.json` and
+  `~/.cache/surf/` preserved.
+
+### Files added
+
+- `src/index.mjs` — library entry (named exports)
+- `src/env.mjs` — key discovery hierarchy + dotenv loader
+- `src/install/postinstall.mjs` — cross-OS postinstall (idempotent)
+- `src/install/preuninstall.mjs` — clean up symlinks on `npm rm`
+- `src/lib/harness-install.mjs` — `symlinkOrCopy` helper, legacy cleanup
+- `src/lib/api/{search,extract,crawl,map,research}.mjs` — library wrappers
+
+### Files modified
+
+- `package.json` — `type: module`, `bin`, `main`, `exports`, `files`,
+  `postinstall`/`preuninstall` scripts; version 1.0.0 → 2.0.0
+- `bin/surf-skill.mjs` — imports point to `../src/lib/`; VERSION 2.0.0;
+  auto-wizard block on first TTY use
+- `src/lib/setup.mjs` — multi-key loop (N keys per provider)
+- `src/lib/dispatch.mjs` — accepts `runCtx.state` for in-memory library mode
+- `README.md` — one-liner install, library section, bonus features
+- `SKILL.md` — `metadata.version: "2.0.0"`, npm install in requires
+
+### Files removed
+
+- `skills/surf-skill/install.sh` — replaced by postinstall.mjs
+- `skills/` directory — dissolved into root (npm-friendly layout)
+- All `CHANGELOG-v2.x.md` (consolidated into this CHANGELOG.md in v1.0.0)
+
+---
+
 ## v1.0.0 — Initial release
 
 `surf-skill` is a multi-provider web skill for AI coding agents that fronts

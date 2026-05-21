@@ -3,19 +3,19 @@
 // across Tavily and Parallel AI with automatic key + provider fallback.
 
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
-import { parseFlags, sleep } from '../lib/flags.mjs';
-import { dispatch, DispatchError } from '../lib/dispatch.mjs';
-import { formatFor } from '../lib/format.mjs';
-import { runKeysSubcommand } from '../lib/keys-cmd.mjs';
-import { cacheClear } from '../lib/cache.mjs';
-import { readUsage, USAGE_LOG } from '../lib/audit.mjs';
-import { migrateLegacy } from '../lib/state.mjs';
-import { runSetup } from '../lib/setup.mjs';
-import { runProjectConfig, formatProjectConfigResult } from '../lib/project-config.mjs';
-import { providerFromRequestId } from '../lib/providers/index.mjs';
-import { progress, setSilent } from '../lib/progress.mjs';
+import { parseFlags, sleep } from '../src/lib/flags.mjs';
+import { dispatch, DispatchError } from '../src/lib/dispatch.mjs';
+import { formatFor } from '../src/lib/format.mjs';
+import { runKeysSubcommand } from '../src/lib/keys-cmd.mjs';
+import { cacheClear } from '../src/lib/cache.mjs';
+import { readUsage, USAGE_LOG } from '../src/lib/audit.mjs';
+import { migrateLegacy } from '../src/lib/state.mjs';
+import { runSetup } from '../src/lib/setup.mjs';
+import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-config.mjs';
+import { providerFromRequestId } from '../src/lib/providers/index.mjs';
+import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '1.0.0';
+const VERSION = '2.0.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -471,6 +471,30 @@ const { pos, flags } = parseFlags(rest);
 
 // Wire --quiet before any progress event fires.
 if (flags.quiet) setSilent(true);
+
+// Auto-launch setup wizard on first TTY use when no keys are configured.
+// Commands that don't need keys (setup, keys, project-config, help, etc.)
+// are excluded.
+const NO_KEYS_NEEDED = new Set([
+  'setup', 'keys', 'project-config',
+  'cache-clear', 'cost',
+  '--help', '-h', '--version', '-v',
+]);
+if (!NO_KEYS_NEEDED.has(cmd) && process.stdin.isTTY) {
+  try {
+    const { loadState } = await import('../src/lib/state.mjs');
+    const state = await loadState();
+    const hasAny = (state.tavily.keys || []).length || (state.parallel.keys || []).length;
+    if (!hasAny) {
+      process.stderr.write('No keys configured. Launching setup wizard…\n\n');
+      await runSetup();
+      process.stderr.write('\n— Resuming your command —\n\n');
+    }
+  } catch {
+    // If anything goes wrong with the auto-wizard, fall through to the
+    // normal command which will produce its own actionable error.
+  }
+}
 
 try {
   switch (cmd) {

@@ -27,25 +27,54 @@ research┘
 ## Quickstart (30 seconds)
 
 ```bash
-git clone https://github.com/frederico-kluser/surf-skill.git
-cd surf-skill
-bash skills/surf-skill/install.sh
-surf-skill setup            # interactive wizard
+# One-liner cross-OS install (Linux, macOS, Windows)
+npm i -g surf-skill
 
-# In each project where you'll use surf-skill:
-cd path/to/your-project
-surf-skill project-config   # REQUIRED for Copilot CLI; recommended elsewhere
+# That's it — postinstall creates symlinks into all supported harnesses,
+# initializes ~/.config/surf/keys.json, and prints a hint.
+# On first run, an interactive wizard auto-launches in TTY:
 
 surf-skill search "your query"
+# → "No keys configured. Launching setup wizard…"
+# → prompts for Tavily key #1, #2, …, Parallel key #1, #2, …
+# → resumes your command
+
+# In each project where you'll use surf-skill (REQUIRED for GH Copilot CLI):
+cd path/to/your-project
+surf-skill project-config
 ```
 
-The installer creates symlinks for all supported harnesses, configures their
-global bash timeouts where possible, and seeds `keys.json` from
-`$TAVILY_API_KEY` / `$PARALLEL_API_KEY` if those env vars are set.
+You can also run `surf-skill setup` manually anytime to add more keys.
 
-`surf-skill project-config` then writes per-project config so the bash tool
-in that repo doesn't time out — this is **required** for GitHub Copilot CLI
-(default 30 s) and **recommended** for Claude Code / Pi (raises 120 s → 300 s).
+### Use as a Node library
+
+```bash
+npm i surf-skill
+```
+
+```js
+import { search, extract, research } from 'surf-skill';
+
+// Auto-discovers keys: opts > process.env > .env > ~/.config/surf/keys.json
+const r = await search('claude api', { max: 3 });
+console.log(r.data.results[0].url);
+
+// Or pass keys explicitly (great for serverless / Next.js API routes)
+const r2 = await search('x', {
+  tavilyKeys: [process.env.MY_TAVILY_1, process.env.MY_TAVILY_2],
+  depth: 'advanced',
+});
+
+// Batch search (single call, N queries, partial-failure tolerant)
+const batch = await search(['topic A', 'topic B', 'topic C'], { max: 2 });
+
+// Deep research
+const job = await research('compare X vs Y', { model: 'mini' });
+console.log(job.data.content);
+```
+
+Library works server-side (Node / Next.js API routes / Express). Not for
+browser bundles — Tavily and Parallel don't enable CORS for browser origins.
 
 ---
 
@@ -83,7 +112,7 @@ breaks.
 ### Claude Code
 
 ```bash
-bash skills/surf-skill/install.sh
+npm i -g surf-skill
 # Installer writes ~/.claude/settings.json:
 #   { "env": { "BASH_DEFAULT_TIMEOUT_MS": "300000",
 #              "BASH_MAX_TIMEOUT_MS": "600000" } }
@@ -100,7 +129,7 @@ pass `timeout: 600000` on the Bash call (10 min hard cap), or set
 ⚠️ **Default bash timeout is 30 s — the most fragile of the three.**
 
 ```bash
-bash skills/surf-skill/install.sh
+npm i -g surf-skill
 # Symlink created at ~/.copilot/skills/ (via ~/.agents/skills/surf-skill).
 ```
 
@@ -128,7 +157,7 @@ silently to SIGTERM.
 ### Pi Coding Agent
 
 ```bash
-bash skills/surf-skill/install.sh
+npm i -g surf-skill
 # Installer writes ~/.pi/agent/settings.json:
 #   { "env": { "PI_BASH_DEFAULT_TIMEOUT_SECONDS": "300",
 #              "PI_BASH_MAX_TIMEOUT_SECONDS": "600" } }
@@ -286,10 +315,12 @@ surf-skill setup
 surf-skill keys add --provider tavily tvly-...
 surf-skill keys add --provider parallel <key>
 
-# 3. Env import on first install only
-TAVILY_API_KEY=tvly-... PARALLEL_API_KEY=... bash skills/surf-skill/install.sh
-# After import, the installer prints a note asking you to remove the env
-# vars from your shell rc — surf-skill never reads them at runtime.
+# 3. Auto-launch in TTY: just run any command without keys
+surf-skill search "test"
+# → "No keys configured. Launching setup wizard…" → prompts → resumes search
+
+# 4. Library mode: env vars / .env / explicit opts (no setup needed)
+TAVILY_API_KEY=tvly-... node -e "import('surf-skill').then(m => m.search('x'))"
 ```
 
 Inspect what was stored (keys are masked):
