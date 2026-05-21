@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// `surf` — bundle wrapper for surf-skill + surf-plan-skill.
+// `surf` — bundle wrapper for surf-search-skill + surf-plan-skill.
 //
 // Running `surf` with no args launches an interactive setup that:
 //   1. Verifies both skills are installed (symlinks present)
@@ -8,7 +8,7 @@
 //   4. EVERY key added is validated LIVE against the provider's API
 //      before being saved (1-credit cost, ~1-3s per validation)
 //
-// This is the friendliest entry point. `surf-skill` and `surf-plan-skill`
+// This is the friendliest entry point. `surf-search-skill` and `surf-plan-skill`
 // remain available for power users and scripts.
 
 import readline from 'node:readline/promises';
@@ -21,11 +21,11 @@ import { loadState, saveStateAtomic, KEYS_FILE, PROVIDERS } from '../src/lib/sta
 import { validateKey, formatValidation } from '../src/validators/index.mjs';
 import { HARNESS_DIRS } from '../src/lib/harness-install.mjs';
 
-const VERSION = '3.0.1';
+const VERSION = '4.0.0';
 
 const HELP = `surf — multi-skill setup & validation
 
-Bundles surf-skill (multi-provider web search) and surf-plan-skill
+Bundles surf-search-skill (multi-provider web search) and surf-plan-skill
 (research-driven execution planning) into one command.
 
 Commands:
@@ -39,12 +39,12 @@ Commands:
   --version, -v          Show version
 
 Power-user CLIs (also installed):
-  surf-skill ...         The search engine (search/extract/crawl/map/research)
+  surf-search-skill ...         The search engine (search/extract/crawl/map/research)
   surf-plan-skill ...    The planning skill (list/show/new/doctor)
 
 Keys live in:        ${KEYS_FILE} (chmod 600)
 Plans live in:       ~/.claude/plans/<slug>-<timestamp>.md (or ./plans/)
-SKILL.md (search):   ~/.agents/skills/surf-skill/SKILL.md
+SKILL.md (search):   ~/.agents/skills/surf-search-skill/SKILL.md
 SKILL.md (planning): ~/.agents/skills/surf-plan-skill/SKILL.md
 `;
 
@@ -66,7 +66,7 @@ function fmtBytes(n) {
 
 async function detectSkills() {
   const home = os.homedir();
-  const skillsToCheck = ['surf-skill', 'surf-plan-skill'];
+  const skillsToCheck = ['surf-search-skill', 'surf-plan-skill'];
   const found = {};
   for (const skill of skillsToCheck) {
     found[skill] = { dirs: [] };
@@ -292,7 +292,7 @@ try {
     out(VERSION);
   } else if (cmd === 'add') {
     if (!stdin.isTTY) {
-      err('`surf add` is interactive and requires a TTY. Use `surf-skill keys add --provider X <key>` for scripts.');
+      err('`surf add` is interactive and requires a TTY. Use `surf-search-skill keys add --provider X <key>` for scripts.');
       process.exit(1);
     }
     await cmdAdd();

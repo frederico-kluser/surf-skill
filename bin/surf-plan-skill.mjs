@@ -9,7 +9,7 @@ import { listPlans, readPlan, newPlanStub } from '../src/plan/plan-file.mjs';
 import { slugify } from '../src/plan/slug.mjs';
 import { checkSurfSkill } from '../src/lib/check-surf-skill.mjs';
 
-const VERSION = '3.0.1';
+const VERSION = '4.0.0';
 
 const HELP = `surf-plan-skill — research-grounded execution planning skill
 
@@ -21,7 +21,7 @@ Commands:
   list                       List plan files (newest first)
   show <slug-substring>      Cat a plan file (resolves by substring)
   new <task title>           Create a stub plan file, print path
-  doctor                     Check surf-skill is installed + has keys
+  doctor                     Check surf-search-skill is installed + has keys
   --help, -h                 Show this help
   --version, -v              Show version
 
@@ -32,9 +32,9 @@ Plan dir resolution:
   4. ~/.claude/plans/ (default)
 
 How the workflow runs (your AI agent does this when you ask for a plan):
-  Phase 0  Preflight — verify surf-skill is installed
+  Phase 0  Preflight — verify surf-search-skill is installed
   Phase 1  Project discovery — read CLAUDE.md, package.json, source tree
-  Phase 2  Baseline web research — surf-skill search (batched, 3 queries)
+  Phase 2  Baseline web research — surf-search-skill search (batched, 3 queries)
   Phase 3  Open the conversation — what we read + what the web says
   Phase 4  Clarifying questions — MAX 5, each preceded by a search
   Phase 5  Synthesis research — verify choices against latest sources
@@ -114,20 +114,20 @@ async function cmdDoctor() {
 
   const surf = await checkSurfSkill();
   if (surf.installed) {
-    out(`\nsurf-skill:      ✓ installed (${surf.version})`);
+    out(`\nsurf-search-skill: ✓ installed (${surf.version})`);
     if (surf.keyCounts) {
       const k = surf.keyCounts;
       const total = (k.tavily || 0) + (k.parallel || 0) + (k.brave || 0);
       out(`  keys:          ${total} total — tavily ${k.tavily}, parallel ${k.parallel}, brave ${k.brave}`);
       if (total === 0) {
-        out(`\n⚠ surf-skill has no keys. Run: surf-skill setup`);
+        out(`\n⚠ surf-search-skill has no keys. Run: surf-search-skill setup`);
         process.exitCode = 2;
       }
     }
   } else {
-    out(`\nsurf-skill:      ✗ NOT installed`);
+    out(`\nsurf-search-skill: ✗ NOT installed`);
     out(`  ${surf.error || 'command not found'}`);
-    out(`  → Install: npm i -g surf-skill && surf-skill setup`);
+    out(`  → Install: npm i -g surf-skill && surf-search-skill setup`);
     process.exitCode = 1;
   }
 

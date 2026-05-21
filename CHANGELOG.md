@@ -1,5 +1,113 @@
 # Changelog
 
+## v4.0.0 — rename `surf-skill` skill → `surf-search-skill` (consistent suffix), audit cleanup
+
+### Why a major bump
+
+In v3.0.0/v3.0.1 (GitHub-only experiments), we shipped a 2-skill bundle
+named `surf-skill` (search) + `surf-plan-skill` (planning). That naming
+was asymmetric — the search skill was missing the `-skill` suffix while
+the planning skill had it. v4.0.0 makes both consistent:
+
+- **Skill name `surf-skill` → `surf-search-skill`** (frontmatter, harness
+  symlinks, all docs).
+- **Bin `surf-skill` → `surf-search-skill`** (renamed; old bin removed —
+  scripts that called `surf-skill ...` need to update).
+
+The **npm package name stays `surf-skill`** (it's the bundle name; the
+two skills + 3 bins live inside it). So `npm i -g surf-skill` continues
+to install the package, just exposing different binaries inside.
+
+### Breaking changes for v2.x users
+
+- Scripts that ran `surf-skill <subcommand>` must now run
+  `surf-search-skill <subcommand>`. Example:
+  ```bash
+  # before (v2.x)
+  surf-skill search "claude api"
+
+  # after (v4.0.0)
+  surf-search-skill search "claude api"
+  # OR use the wrapper (NEW in v3+):
+  surf search                            # interactive setup
+  ```
+- The harness symlink `~/.claude/skills/surf-skill` is now
+  `~/.claude/skills/surf-search-skill`. Postinstall removes the old
+  symlink (it's in `LEGACY_NAMES` cleanup) and creates the new one.
+- Agent prompts that referenced "surf-skill" by name should now say
+  "surf-search-skill" — this is mainly docs/instructions, since the
+  agent discovers skills by what's in `~/.claude/skills/`.
+
+### What's new vs v3.0.1
+
+- All `surf-skill` references in skill names, CLI commands, banners,
+  HELP text, error messages, postinstall output, and docs updated to
+  `surf-search-skill`. npm package name + URLs + library imports remain
+  `surf-skill` (correct — that's the npm distribution unit).
+- `harness-install.mjs::SKILLS` array now lists `surf-search-skill` as
+  the search skill (was `surf-skill`).
+- `harness-install.mjs::LEGACY_NAMES` adds `surf-skill` and `surf-plan`
+  so upgrades from v2/v3 cleanly remove old symlinks before creating new
+  ones.
+- `references/plan-workflow.md`, `src/plan/plan-file.mjs`,
+  `src/lib/project-config.mjs`, `src/lib/format.mjs`, `src/lib/keys-cmd.mjs`
+  all updated.
+
+### Audit fixes (bugs caught while renaming)
+
+- v3.0.0/v3.0.1 had several stale `surf-plan` (bare, no `-skill` suffix)
+  refs in `src/plan/plan-file.mjs:154` (docstring) and
+  `references/plan-workflow.md` (section headers) — leftover from the
+  standalone v1.0.0 migration. Fixed.
+- The v3.0.0 `src/install/postinstall.mjs` banner hardcoded `3.0.0` —
+  now reads correctly (and updated to 4.0.0).
+- The v3.0.0 `bin/surf-plan-skill.mjs` HELP title was `surf-plan-skill-skill`
+  from an over-aggressive sed during the v2→v3 migration. Fixed.
+- `package.json` `test:syntax` script referenced the old `bin/surf-skill.mjs`
+  filename — updated to `bin/surf-search-skill.mjs` so CI/local tests pass.
+
+### Files changed (high-level)
+
+- Renamed: `bin/surf-skill.mjs` → `bin/surf-search-skill.mjs` (git rename).
+- Edited: `SKILL.md`, `skills/surf-plan-skill/SKILL.md`, all bins,
+  `package.json`, `README.md`, `CHANGELOG.md`,
+  `src/lib/{harness-install,check-surf-skill,keys-cmd,project-config,format}.mjs`,
+  `src/install/postinstall.mjs`, `src/index.mjs`, `src/plan/plan-file.mjs`,
+  `references/plan-workflow.md`.
+- Internal `VERSION` constants in all bins, `dispatch.mjs`, and
+  `validators/index.mjs` bumped to `4.0.0`.
+
+### What didn't change
+
+- npm package name: still `surf-skill`.
+- npm package install: still `npm i -g surf-skill`.
+- Library imports: still `import { search } from 'surf-skill'`.
+- Provider adapter behavior, dispatch fallback, validator logic,
+  keys.json schema, plan-file format, harness directories — all
+  unchanged from v3.0.1.
+- The `surf-plan-skill` skill name stays as is (was already correct).
+
+### Migration
+
+```bash
+# Upgrade:
+npm i -g surf-skill@latest
+
+# Verify all 3 bins:
+surf --version              # 4.0.0
+surf-search-skill --version # 4.0.0
+surf-plan-skill --version   # 4.0.0
+
+# Check the new symlinks (and old ones removed):
+ls ~/.claude/skills/        # surf-search-skill + surf-plan-skill (NO surf-skill)
+ls ~/.agents/skills/        # same
+```
+
+Find/replace in your scripts: `surf-skill ` → `surf-search-skill ` (mind
+the trailing space so you don't break `npm i -g surf-skill`).
+
+---
+
 ## v3.0.1 — package.json fix for the v3.0.0 bundle
 
 v3.0.0 shipped to GitHub with a partial `package.json` edit: the new

@@ -64,7 +64,7 @@ function buildChain(operation, state, flags) {
     if (!providerHasUsableKey(state, decoded.provider)) {
       throw new DispatchError(
         'NoUsableKeyForRequestId',
-        `request_id belongs to provider '${decoded.provider}', which has no usable keys; run "surf-skill keys add --provider ${decoded.provider} <key>" and retry`
+        `request_id belongs to provider '${decoded.provider}', which has no usable keys; run "surf-search-skill keys add --provider ${decoded.provider} <key>" and retry`
       );
     }
     return { chain: [decoded.provider], pinned: true, decoded };
@@ -100,7 +100,7 @@ function buildChain(operation, state, flags) {
   if (chain.length === 0) {
     throw new DispatchError(
       'NoProviderAvailable',
-      `operation '${operation}' requires one of [${baseChain.join(', ')}]; run "surf-skill keys add --provider <name> <key>"`
+      `operation '${operation}' requires one of [${baseChain.join(', ')}]; run "surf-search-skill keys add --provider <name> <key>"`
     );
   }
 
@@ -199,7 +199,7 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
           'LikelyAgentTimeout',
           `Operation '${operation}' would likely exceed the agent's bash timeout ` +
           `(~${Math.round(harnessBudget / 1000)}s detected, harness=${harnessName}). ` +
-          `Run 'surf-skill project-config' in this project to raise the limit, ` +
+          `Run 'surf-search-skill project-config' in this project to raise the limit, ` +
           `or use 'research-start' + 'research-poll' for long jobs.`,
           { harness: harnessName, budgetMs: harnessBudget, elapsedMs: elapsed },
         );

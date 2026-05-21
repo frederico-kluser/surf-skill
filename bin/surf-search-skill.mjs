@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// surf-skill — multi-provider web-skill CLI. Routes search/extract/crawl/map/research
+// surf-search-skill — multi-provider web-skill CLI. Routes search/extract/crawl/map/research
 // across Tavily and Parallel AI with automatic key + provider fallback.
 
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
@@ -15,7 +15,7 @@ import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '3.0.1';
+const VERSION = '4.0.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -23,15 +23,15 @@ const VERSION = '3.0.1';
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {
     process.stderr.write(
-      `❌ Error [KilledBySignal]: surf-skill received ${sig}. ` +
-      `If this came from the agent's bash timeout, run 'surf-skill project-config' ` +
+      `❌ Error [KilledBySignal]: surf-search-skill received ${sig}. ` +
+      `If this came from the agent's bash timeout, run 'surf-search-skill project-config' ` +
       `in this project to raise the limit, or use 'research-start' + 'research-poll' for long jobs.\n`
     );
     process.exit(143); // 128 + 15 (SIGTERM convention)
   });
 }
 
-const HELP = `surf-skill — multi-provider web skill (Tavily + Parallel AI)
+const HELP = `surf-search-skill — multi-provider web skill (Tavily + Parallel AI)
 
 Commands:
   setup                       Interactive onboarding wizard (TTY required)
@@ -70,22 +70,22 @@ Global flags:
   --version, -v                  Show version
 
 Progress logs (stderr):
-  surf-skill emits one line per event to stderr, e.g.:
+  surf-search-skill emits one line per event to stderr, e.g.:
     [surf 17:58:12] ▸ search → tavily (key #0)
     [surf 17:58:14] ✓ search tavily 1234ms (2 credits)
   Format is stable for agent parsing. Use --quiet or SURF_QUIET=1 to silence.
 
 Examples:
-  surf-skill setup
-  surf-skill search "claude 4.7 release notes" --max 3
-  surf-skill search "topic A" "topic B" "topic C"      # batch (3 queries)
-  surf-skill extract https://docs.anthropic.com/...
-  surf-skill research-start "compare X and Y" --model pro --confirm-expensive
-  surf-skill keys add --provider tavily tvly-...
-  surf-skill keys list
+  surf-search-skill setup
+  surf-search-skill search "claude 4.7 release notes" --max 3
+  surf-search-skill search "topic A" "topic B" "topic C"      # batch (3 queries)
+  surf-search-skill extract https://docs.anthropic.com/...
+  surf-search-skill research-start "compare X and Y" --model pro --confirm-expensive
+  surf-search-skill keys add --provider tavily tvly-...
+  surf-search-skill keys list
 
 Key & state are stored in ~/.config/surf/keys.json (chmod 600).
-Docs: ~/.agents/skills/surf-skill/SKILL.md`;
+Docs: ~/.agents/skills/surf-search-skill/SKILL.md`;
 
 function die(msg, code = 1) {
   process.stderr.write(`❌ Error: ${msg}\n`);
@@ -144,7 +144,7 @@ function buildSearchArgs(query, flags) {
 }
 
 async function cmdSearch(pos, flags) {
-  if (!pos.length) die('Usage: surf-skill search "query" [more queries ...]');
+  if (!pos.length) die('Usage: surf-search-skill search "query" [more queries ...]');
 
   // Backward-compat: 1 positional arg = exactly one query (same as before).
   if (pos.length === 1) {
@@ -255,7 +255,7 @@ function emitBatchResult(payload, flags) {
 }
 
 async function cmdExtract(pos, flags) {
-  if (!pos.length) die('Usage: surf-skill extract <url1> [url2 ...]');
+  if (!pos.length) die('Usage: surf-search-skill extract <url1> [url2 ...]');
   if (pos.length > 20) die('extract supports at most 20 URLs per call.');
   const args = {
     urls: pos,
@@ -272,7 +272,7 @@ async function cmdExtract(pos, flags) {
 
 async function cmdCrawl(pos, flags) {
   const url = pos[0];
-  if (!url) die('Usage: surf-skill crawl <url> [flags]');
+  if (!url) die('Usage: surf-search-skill crawl <url> [flags]');
   const args = {
     url,
     maxDepth: flags['max-depth'],
@@ -297,7 +297,7 @@ async function cmdCrawl(pos, flags) {
 
 async function cmdMap(pos, flags) {
   const url = pos[0];
-  if (!url) die('Usage: surf-skill map <url> [flags]');
+  if (!url) die('Usage: surf-search-skill map <url> [flags]');
   const args = {
     url,
     maxDepth: flags['max-depth'],
@@ -317,7 +317,7 @@ async function cmdMap(pos, flags) {
 
 async function cmdResearchStart(pos, flags) {
   const input = pos.join(' ').trim();
-  if (!input) die('Usage: surf-skill research-start "topic" [--model mini|auto|pro]');
+  if (!input) die('Usage: surf-search-skill research-start "topic" [--model mini|auto|pro]');
   const args = {
     input,
     model: flags.model || 'auto',
@@ -332,7 +332,7 @@ async function cmdResearchStart(pos, flags) {
 
 async function cmdResearchPoll(pos, flags) {
   const id = pos[0];
-  if (!id) die('Usage: surf-skill research-poll <request_id>');
+  if (!id) die('Usage: surf-search-skill research-poll <request_id>');
   const decoded = providerFromRequestId(id);
   if (!decoded) die(`unknown request_id prefix in '${id}' (expected tvly:... or pllx:...)`);
   const envelope = await dispatch('research-poll', {}, { ...flags, __requestId: id });
@@ -344,10 +344,10 @@ async function cmdResearchPoll(pos, flags) {
 
 async function cmdResearch(pos, flags) {
   const input = pos.join(' ').trim();
-  if (!input) die('Usage: surf-skill research "topic"');
+  if (!input) die('Usage: surf-search-skill research "topic"');
   const model = flags.model || 'mini';
   if (model === 'pro' || model === 'ultra') {
-    die(`Refusing sync research with model=${model} (would exceed timeout). Use 'surf-skill research-start' + 'surf-skill research-poll'.`);
+    die(`Refusing sync research with model=${model} (would exceed timeout). Use 'surf-search-skill research-start' + 'surf-search-skill research-poll'.`);
   }
   const startArgs = {
     input,
@@ -368,7 +368,7 @@ async function cmdResearch(pos, flags) {
       return;
     }
   }
-  out(`**Research did not finish in 50s.** Continue with: \`surf-skill research-poll ${id}\``);
+  out(`**Research did not finish in 50s.** Continue with: \`surf-search-skill research-poll ${id}\``);
 }
 
 async function persistResearchHandle(envelope) {
@@ -384,7 +384,7 @@ async function persistResearchHandle(envelope) {
 }
 
 async function cmdUsage(_pos, flags) {
-  if (!flags.provider) die(`Usage: surf-skill usage --provider <tavily|parallel>`);
+  if (!flags.provider) die(`Usage: surf-search-skill usage --provider <tavily|parallel>`);
   emitResult(await dispatch('usage', {}, flags), flags);
 }
 
@@ -427,13 +427,13 @@ async function cmdCost(_pos, flags) {
       md += `- ${e.ts} [${e.provider || '?'}] ${e.op}: ${e.credits ?? '—'}${e.cached ? ' (cache hit)' : ''}\n`;
     }
   }
-  md += '\nUse `surf-skill cost --reset` to clear the local ledger.';
+  md += '\nUse `surf-search-skill cost --reset` to clear the local ledger.';
   out(md);
 }
 
 async function cmdKeys(pos, flags) {
   const sub = pos[0];
-  if (!sub) die('Usage: surf-skill keys <add|remove|list|reset|clear> ...');
+  if (!sub) die('Usage: surf-search-skill keys <add|remove|list|reset|clear> ...');
   const subPos = pos.slice(1);
   try {
     const result = await runKeysSubcommand(sub, subPos, flags);
@@ -536,13 +536,13 @@ try {
       break;
     }
     default:
-      die(`Unknown command: ${cmd}. Try 'surf-skill --help'.`);
+      die(`Unknown command: ${cmd}. Try 'surf-search-skill --help'.`);
   }
 } catch (e) {
   if (e instanceof DispatchError) {
     process.stderr.write(`❌ Error [${e.code}]: ${e.message}\n`);
     if (e.code === 'NoProviderAvailable' && process.stdin.isTTY) {
-      process.stderr.write(`→ Run 'surf-skill setup' to configure keys interactively.\n`);
+      process.stderr.write(`→ Run 'surf-search-skill setup' to configure keys interactively.\n`);
     }
     process.exit(1);
   }

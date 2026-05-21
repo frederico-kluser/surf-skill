@@ -22,8 +22,14 @@ export const HARNESS_DIRS = [
   path.join(home, '.pi', 'agent', 'skills'),  // Pi Coding Agent
 ];
 
-// Legacy names from earlier versions that should be removed on upgrade.
-const LEGACY_NAMES = ['tavily', 'surf', 'tvly'];
+// Legacy skill names removed on upgrade so stale symlinks don't shadow the
+// current ones. Includes:
+//   tavily     — pre-rename (before surf-skill)
+//   tvly       — short alias from early experiments
+//   surf       — `surf` is a CLI binary now; would clash with the bin in PATH
+//   surf-skill — pre-v4 search-skill name (renamed to surf-search-skill)
+//   surf-plan  — standalone v1 (folded in as surf-plan-skill in v3+)
+const LEGACY_NAMES = ['tavily', 'tvly', 'surf', 'surf-skill', 'surf-plan'];
 
 export async function symlinkOrCopy(target, link) {
   // If link already exists, decide whether to replace it.
@@ -82,11 +88,11 @@ export async function unlinkIfOurs(link, expectedTarget) {
 //   - surf-skill       → pkgRoot           (root SKILL.md, search engine)
 //   - surf-plan-skill  → pkgRoot/skills/surf-plan-skill/  (planning workflow)
 //
-// Each harness gets 2 symlinks: ~/.claude/skills/surf-skill and
+// Each harness gets 2 symlinks: ~/.claude/skills/surf-search-skill and
 // ~/.claude/skills/surf-plan-skill (and same for .agents/.codex/.pi).
 const SKILLS = [
-  { name: 'surf-skill',      subdir: null },              // root of package
-  { name: 'surf-plan-skill', subdir: 'skills/surf-plan-skill' },
+  { name: 'surf-search-skill', subdir: null },                      // root of package
+  { name: 'surf-plan-skill',   subdir: 'skills/surf-plan-skill' },  // sub-dir of package
 ];
 
 export async function installSkill(pkgRoot) {

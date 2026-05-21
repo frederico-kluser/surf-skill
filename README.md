@@ -19,7 +19,7 @@
 ---
 
 **Two skills. Three providers. One install.** `npm i -g surf-skill` now bundles
-both **`surf-skill`** (multi-provider web search) and **`surf-plan-skill`**
+both **`surf-search-skill`** (multi-provider web search) and **`surf-plan-skill`**
 (research-driven execution planning), plus a friendly `surf` setup wrapper with
 live key validation.
 
@@ -27,22 +27,22 @@ live key validation.
                   ┌──▶ Tavily   (search, extract, crawl, map, research)
 search   ─┐       │
 extract  ─┤       │
-crawl   ──┼──▶ surf-skill ──▶ Parallel (search, extract, research async)
+crawl   ──┼──▶ surf-search-skill ──▶ Parallel (search, extract, research async)
 map     ──┤       │
 research ─┘       │
                   └──▶ Brave    (search only — own index)
 
 plan / design ──▶ surf-plan-skill ──┐
-architect / spec ──────────────────►│  (calls surf-skill for web research)
+architect / spec ──────────────────►│  (calls surf-search-skill for web research)
                                     └──▶ Markdown plan file with [^N] citations
 ```
 
 | | |
 |---|---|
-| **Status** | v3.0.0 (npm) |
+| **Status** | v4.0.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
-| **Skills shipped** | `surf-skill` (search) + `surf-plan-skill` (planning) |
-| **Bins shipped** | `surf` (interactive setup + validation), `surf-skill`, `surf-plan-skill` |
+| **Skills shipped** | `surf-search-skill` (search) + `surf-plan-skill` (planning) |
+| **Bins shipped** | `surf` (interactive setup + validation), `surf-search-skill`, `surf-plan-skill` |
 | **Runtime** | Node ≥ 18. Zero npm deps. |
 | **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime by the CLI. |
 | **Supported agents** | Claude Code · GitHub Copilot CLI · Pi Coding Agent · OpenCode · Codex CLI |
@@ -57,12 +57,12 @@ surf                         # interactive: add keys with LIVE validation
                              #   ✗ invalid (auth, HTTP 401) — NOT saved
 
 # Use directly:
-surf-skill search "claude 4.7 release notes" --max 3
-surf-skill search "X" --provider brave --mode fast
+surf-search-skill search "claude 4.7 release notes" --max 3
+surf-search-skill search "X" --provider brave --mode fast
 
 # Or ask an AI agent:
 > make a plan for adding rate limiting to my Express API
-# → surf-plan-skill kicks in: reads project, runs surf-skill searches,
+# → surf-plan-skill kicks in: reads project, runs surf-search-skill searches,
 #   asks 3-5 researched questions, writes ~/.claude/plans/<slug>-<ts>.md
 ```
 
@@ -78,17 +78,17 @@ npm i -g surf-skill
 # initializes ~/.config/surf/keys.json, and prints a hint.
 # On first run, an interactive wizard auto-launches in TTY:
 
-surf-skill search "your query"
+surf-search-skill search "your query"
 # → "No keys configured. Launching setup wizard…"
 # → prompts for Tavily key #1, #2, …, Parallel key #1, #2, …
 # → resumes your command
 
-# In each project where you'll use surf-skill (REQUIRED for GH Copilot CLI):
+# In each project where you'll use surf-search-skill (REQUIRED for GH Copilot CLI):
 cd path/to/your-project
-surf-skill project-config
+surf-search-skill project-config
 ```
 
-You can also run `surf-skill setup` manually anytime to add more keys.
+You can also run `surf-search-skill setup` manually anytime to add more keys.
 
 ### Use as a Node library
 
@@ -129,7 +129,7 @@ to spread cost across accounts. Today every agent skill is **1-to-1** with
 a provider — when a key dies or a provider has an outage, your agent loop
 breaks.
 
-`surf-skill` is a connector:
+`surf-search-skill` is a connector:
 
 - **Multi-key per provider.** Add as many keys as you want; rotation is
   automatic on `401`/`403`/`402` (auth, insufficient credits) or persistent
@@ -162,9 +162,9 @@ npm i -g surf-skill
 #              "BASH_MAX_TIMEOUT_MS": "600000" } }
 ```
 
-The skill becomes available at `~/.claude/skills/surf-skill/`. In a Claude
+The skill becomes available at `~/.claude/skills/surf-search-skill/`. In a Claude
 Code session, just ask: "search the web for X" — the agent will invoke
-`surf-skill` via Bash. For commands that may exceed 5 min, the agent can
+`surf-search-skill` via Bash. For commands that may exceed 5 min, the agent can
 pass `timeout: 600000` on the Bash call (10 min hard cap), or set
 `run_in_background: true` and monitor via `/tasks`.
 
@@ -174,28 +174,28 @@ pass `timeout: 600000` on the Bash call (10 min hard cap), or set
 
 ```bash
 npm i -g surf-skill
-# Symlink created at ~/.copilot/skills/ (via ~/.agents/skills/surf-skill).
+# Symlink created at ~/.copilot/skills/ (via ~/.agents/skills/surf-search-skill).
 ```
 
 **Per-project**, run inside the project root:
 
 ```bash
-surf-skill project-config
+surf-search-skill project-config
 # writes .github/copilot-hooks.json with { "timeoutSec": 300 }
 # detects .github/ automatically; use --harness copilot --yes to force
 ```
 
-Without this, any `surf-skill` command other than `--help`, `--version`,
+Without this, any `surf-search-skill` command other than `--help`, `--version`,
 `keys list/add`, or `search --max 1` will time out. With it, you can use
 the full command set up to ~5 min per call.
 
 For longer operations, use Copilot CLI's async pattern: `/delegate` the
-`surf-skill research-start ...` call, then poll with `surf-skill
+`surf-search-skill research-start ...` call, then poll with `surf-search-skill
 research-poll <id>` from a regular session.
 
-If surf-skill detects the agent will likely kill the call before it can
+If surf-search-skill detects the agent will likely kill the call before it can
 finish, it now aborts early with `LikelyAgentTimeout` and tells the agent
-to suggest `surf-skill project-config` to the user — instead of dying
+to suggest `surf-search-skill project-config` to the user — instead of dying
 silently to SIGTERM.
 
 ### Pi Coding Agent
@@ -207,14 +207,14 @@ npm i -g surf-skill
 #              "PI_BASH_MAX_TIMEOUT_SECONDS": "600" } }
 ```
 
-The skill becomes available at `~/.pi/agent/skills/surf-skill/`. Pi reads
+The skill becomes available at `~/.pi/agent/skills/surf-search-skill/`. Pi reads
 the timeout from env, so the settings.json above is enough. For
 long-running work, Pi supports subagents with `--bg` and the `await` tool.
 
 ### OpenCode & Codex CLI
 
-Also auto-configured by the installer (`~/.agents/skills/surf-skill/` and
-`~/.codex/skills/surf-skill/`). OpenCode gets `mcp_timeout` + `bash.timeout_ms`
+Also auto-configured by the installer (`~/.agents/skills/surf-search-skill/` and
+`~/.codex/skills/surf-search-skill/`). OpenCode gets `mcp_timeout` + `bash.timeout_ms`
 set to 600 000 ms in `~/.config/opencode/opencode.json`.
 
 ---
@@ -230,7 +230,7 @@ set to 600 000 ms in `~/.config/opencode/opencode.json`.
 
 If you see timeouts, the order of fixes:
 
-1. Use `surf-skill research-start` + `research-poll` instead of sync
+1. Use `surf-search-skill research-start` + `research-poll` instead of sync
    `research`.
 2. Reduce `--limit` / `--max` / `--max-depth`.
 3. Bump the per-harness timeout (see the relevant card above).
@@ -256,7 +256,7 @@ If you see timeouts, the order of fixes:
 | `cost [--reset]` | Local credit ledger (per-provider) | n/a |
 | `keys <subcmd>` | `add`, `remove`, `list`, `reset`, `clear` | n/a |
 
-Full reference: `skills/surf-skill/SKILL.md`.
+Full reference: `skills/surf-search-skill/SKILL.md`.
 
 Global flags every command accepts:
 
@@ -278,16 +278,16 @@ Global flags every command accepts:
 ### Search modes
 
 ```bash
-surf-skill search "X" --mode fast    # 5 results / 1 credit Tavily / minimal latency
-surf-skill search "X" --mode normal  # 10 results / default everywhere
-surf-skill search "X" --mode slow    # 20 results / Tavily advanced / deeper signal
+surf-search-skill search "X" --mode fast    # 5 results / 1 credit Tavily / minimal latency
+surf-search-skill search "X" --mode normal  # 10 results / default everywhere
+surf-search-skill search "X" --mode slow    # 20 results / Tavily advanced / deeper signal
 ```
 
 Want to force a specific provider for a given mode?
 
 ```bash
-surf-skill search "X" --provider brave --mode slow    # 20 brave results, no fallback
-surf-skill search "X" --provider tavily --mode fast   # Tavily fast tier
+surf-search-skill search "X" --provider brave --mode slow    # 20 brave results, no fallback
+surf-search-skill search "X" --provider tavily --mode fast   # Tavily fast tier
 ```
 
 ---
@@ -298,7 +298,7 @@ When you need to research **multiple angles** of the same topic, batch them
 in a single call. Each positional arg is an independent query:
 
 ```bash
-surf-skill search "compare X vs Y" "alternatives to X" "X security issues"
+surf-search-skill search "compare X vs Y" "alternatives to X" "X security issues"
 ```
 
 - Runs sequentially (avoids rate-limit thrashing on a single key).
@@ -363,7 +363,7 @@ call flow:
 Force a specific provider for debugging:
 
 ```bash
-surf-skill search "x" --provider parallel
+surf-search-skill search "x" --provider parallel
 # 'parallel' fails ⇒ command fails (no fallback when --provider is set)
 ```
 
@@ -373,14 +373,14 @@ surf-skill search "x" --provider parallel
 
 ```bash
 # 1. Wizard (recommended in a TTY)
-surf-skill setup
+surf-search-skill setup
 
 # 2. Direct
-surf-skill keys add --provider tavily tvly-...
-surf-skill keys add --provider parallel <key>
+surf-search-skill keys add --provider tavily tvly-...
+surf-search-skill keys add --provider parallel <key>
 
 # 3. Auto-launch in TTY: just run any command without keys
-surf-skill search "test"
+surf-search-skill search "test"
 # → "No keys configured. Launching setup wizard…" → prompts → resumes search
 
 # 4. Library mode: env vars / .env / explicit opts (no setup needed)
@@ -390,7 +390,7 @@ TAVILY_API_KEY=tvly-... node -e "import('surf-skill').then(m => m.search('x'))"
 Inspect what was stored (keys are masked):
 
 ```bash
-surf-skill keys list
+surf-search-skill keys list
 # **Surf keys** (config: ~/.config/surf/keys.json)
 # last_ok_provider: `tavily`
 # ## tavily (2 keys)
@@ -404,25 +404,25 @@ surf-skill keys list
 
 **`❌ Error [NoProviderAvailable]: operation 'X' requires one of [...]`**
 → The op needs a key for a provider you haven't configured. In a TTY the
-error already suggests `surf-skill setup`. Outside TTY, run
-`surf-skill keys add --provider <name> <key>`.
+error already suggests `surf-search-skill setup`. Outside TTY, run
+`surf-search-skill keys add --provider <name> <key>`.
 
 **`❌ Error [AllProvidersExhausted]: ...`**
-→ Every key on every eligible provider failed. Check `surf-skill keys list`
+→ Every key on every eligible provider failed. Check `surf-search-skill keys list`
 — if everything is `burned`, you've either rotated keys mid-billing-cycle
-or the providers are down. Run `surf-skill keys reset` to retry.
+or the providers are down. Run `surf-search-skill keys reset` to retry.
 
 **Command timed out in GH Copilot CLI**
-→ Run `surf-skill project-config` inside the project root. See the
+→ Run `surf-search-skill project-config` inside the project root. See the
 Copilot CLI card above.
 
 **`❌ Error [LikelyAgentTimeout]: ...`**
-→ surf-skill detected the harness will kill the call before it finishes
-(typical on Copilot CLI without per-project config). Run `surf-skill
+→ surf-search-skill detected the harness will kill the call before it finishes
+(typical on Copilot CLI without per-project config). Run `surf-search-skill
 project-config` in the project, then retry. Don't retry the same call
 without fixing the timeout first.
 
-**`❌ Error [KilledBySignal]: surf-skill received SIGTERM/SIGINT`**
+**`❌ Error [KilledBySignal]: surf-search-skill received SIGTERM/SIGINT`**
 → The harness killed us mid-flight. Same fix as `LikelyAgentTimeout`. The
 SIGTERM handler exists as a fallback — the self-budget check should fire
 first when env vars are set.
@@ -432,45 +432,59 @@ first when env vars are set.
 export `SURF_ALLOW_EXPENSIVE=1` for the session.
 
 **`Refusing sync research with model=pro`**
-→ Use `surf-skill research-start --model pro ...` then `surf-skill
+→ Use `surf-search-skill research-start --model pro ...` then `surf-search-skill
 research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout
+## Repository layout (v4.0.0)
 
 ```text
 .
-├── package.json
+├── package.json                       ← name: surf-skill (npm), version 4.0.0, 3 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE
-└── skills/
-    └── surf-skill/
-        ├── SKILL.md
-        ├── install.sh
-        ├── bin/
-        │   └── surf-skill.mjs
-        ├── lib/
-        │   ├── state.mjs          ← keys.json I/O, monthly auto-reset
-        │   ├── cache.mjs          ← TTL response cache
-        │   ├── audit.mjs          ← audit + usage JSONL
-        │   ├── flags.mjs          ← parsing + helpers
-        │   ├── cost.mjs           ← estimateCredits + guard
-        │   ├── format.mjs         ← markdown formatters
-        │   ├── dispatch.mjs       ← provider/key fallback + self-budget
-        │   ├── keys-cmd.mjs       ← surf-skill keys add/remove/...
-        │   ├── setup.mjs          ← interactive onboarding
-        │   ├── project-config.mjs ← surf-skill project-config
-        │   ├── progress.mjs       ← stderr progress events
-        │   └── providers/
-        │       ├── index.mjs
-        │       ├── tavily.mjs
-        │       └── parallel.mjs
-        └── references/
-            ├── tavily-api.md
-            ├── parallel-api.md
-            └── COSTS.md
+├── logo.png
+├── SKILL.md                           ← surf-search-skill (search skill, root of pkg)
+├── bin/
+│   ├── surf.mjs                       ← interactive setup + key validation
+│   ├── surf-search-skill.mjs          ← multi-provider web search CLI
+│   └── surf-plan-skill.mjs            ← planning workflow CLI
+├── skills/
+│   └── surf-plan-skill/
+│       └── SKILL.md                   ← surf-plan-skill (planning skill)
+├── src/
+│   ├── index.mjs                      ← library entry (search/extract/research/...)
+│   ├── env.mjs                        ← key discovery (opts > env > .env > config)
+│   ├── plan/                          ← plan-file, plans-dir, slug (planning lib)
+│   ├── validators/                    ← per-provider key validators (live API)
+│   ├── lib/
+│   │   ├── state.mjs                  ← ~/.config/surf/keys.json I/O
+│   │   ├── cache.mjs                  ← TTL response cache
+│   │   ├── audit.mjs                  ← audit + usage JSONL
+│   │   ├── flags.mjs, cost.mjs, format.mjs
+│   │   ├── dispatch.mjs               ← provider/key fallback + self-budget
+│   │   ├── keys-cmd.mjs               ← surf-search-skill keys add/remove/...
+│   │   ├── setup.mjs                  ← interactive onboarding (with validation)
+│   │   ├── project-config.mjs         ← surf-search-skill project-config
+│   │   ├── progress.mjs               ← stderr progress events
+│   │   ├── check-surf-skill.mjs       ← detect companion CLI in PATH
+│   │   ├── harness-install.mjs        ← cross-OS symlink install for 2 skills
+│   │   ├── api/                       ← library search/extract/crawl/map/research
+│   │   └── providers/
+│   │       ├── index.mjs              ← capability map (search + 3 providers)
+│   │       ├── tavily.mjs
+│   │       ├── parallel.mjs
+│   │       └── brave.mjs
+│   └── install/
+│       ├── postinstall.mjs            ← cross-OS symlinks + skeleton keys.json
+│       └── preuninstall.mjs           ← cleanup our symlinks
+└── references/
+    ├── tavily-api.md
+    ├── parallel-api.md
+    ├── plan-workflow.md               ← deeper docs on the 6-phase planning workflow
+    └── COSTS.md
 ```
 
 ---
@@ -480,9 +494,9 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 - This repository contains **no real API keys**. The installer only uses
   placeholders.
 - Keys are stored exclusively in `~/.config/surf/keys.json` (chmod 600).
-  `surf-skill` does not read keys from env at runtime.
+  `surf-search-skill` does not read keys from env at runtime.
 - The audit log records only `provider` name and key **index**, never the
-  key itself. `surf-skill keys list` masks every key (`tvly-…ab12`).
+  key itself. `surf-search-skill keys list` masks every key (`tvly-…ab12`).
 - The skill never executes content returned from the web — it just prints it.
 - Review any skill before installing. Skills can instruct agents to run
   commands.

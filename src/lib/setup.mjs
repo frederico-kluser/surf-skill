@@ -1,5 +1,5 @@
 // Interactive onboarding wizard. Requires a TTY. Non-TTY callers should use
-// `surf-skill keys add` directly.
+// `surf-search-skill keys add` directly.
 //
 // Multi-key: prompts for N keys per provider (Enter to finish that provider).
 // 3 providers: Tavily, Parallel, Brave.
@@ -10,7 +10,7 @@ import { loadState, saveStateAtomic, KEYS_FILE } from './state.mjs';
 import { validateKey, formatValidation } from '../validators/index.mjs';
 
 const BANNER = `
-┌─ surf-skill setup ──────────────────────────────────────
+┌─ surf-search-skill setup ──────────────────────────────────────
 │ Configure API keys. You can add multiple keys per provider
 │ (Enter empty to finish a provider; Enter twice in a row to
 │ skip it entirely).
@@ -27,21 +27,21 @@ const CHEAT_SHEET_TPL = (counts) => `
 ✓ Saved. Now have ${counts.tav} Tavily key${counts.tav === 1 ? '' : 's'}, ${counts.par} Parallel key${counts.par === 1 ? '' : 's'}, ${counts.brv} Brave key${counts.brv === 1 ? '' : 's'}.
 
 Try one of:
-  surf-skill search "your query"
-  surf-skill search "q1" "q2" "q3"                # batch (N queries)
-  surf-skill search "x" --provider brave --mode fast
-  surf-skill extract https://example.com
-  surf-skill keys list
+  surf-search-skill search "your query"
+  surf-search-skill search "q1" "q2" "q3"                # batch (N queries)
+  surf-search-skill search "x" --provider brave --mode fast
+  surf-search-skill extract https://example.com
+  surf-search-skill keys list
 
 Add another key later with:
-  surf-skill keys add --provider <tavily|parallel|brave> <key>
+  surf-search-skill keys add --provider <tavily|parallel|brave> <key>
 
-🛠  IMPORTANT — in each project where you'll use surf-skill, run:
-      surf-skill project-config
+🛠  IMPORTANT — in each project where you'll use surf-search-skill, run:
+      surf-search-skill project-config
    This raises the per-project bash timeout for the harness in that repo.
 
 ⚠  GitHub Copilot CLI users: this step is REQUIRED. Copilot's default bash
-   timeout is 30s and surf-skill needs more (most commands run 3–60s).
+   timeout is 30s and surf-search-skill needs more (most commands run 3–60s).
 
 Docs: SKILL.md  ·  Repo: https://github.com/frederico-kluser/surf-skill
 `;
@@ -75,9 +75,9 @@ async function promptKeys(rl, provider, existing = []) {
 export async function runSetup() {
   if (!stdin.isTTY) {
     const err = new Error(`'setup' requires a TTY. Use:
-  surf-skill keys add --provider tavily <key>
-  surf-skill keys add --provider parallel <key>
-  surf-skill keys add --provider brave <key>`);
+  surf-search-skill keys add --provider tavily <key>
+  surf-search-skill keys add --provider parallel <key>
+  surf-search-skill keys add --provider brave <key>`);
     err.code = 'NO_TTY';
     throw err;
   }
@@ -100,7 +100,7 @@ export async function runSetup() {
   }
 
   if (!newTav.length && !newPar.length && !newBrv.length) {
-    stdout.write('\nNo new keys provided. Rerun with: surf-skill setup\n');
+    stdout.write('\nNo new keys provided. Rerun with: surf-search-skill setup\n');
     return { addedTavily: 0, addedParallel: 0, addedBrave: 0 };
   }
 
@@ -134,7 +134,7 @@ export async function runSetup() {
     stdout.write(`\n⚠ ${dropped} key${dropped === 1 ? '' : 's'} failed validation and were NOT saved.\n`);
   }
   if (!keptTav.length && !keptPar.length && !keptBrv.length) {
-    stdout.write('\nNo valid keys to save. Re-run `surf-skill setup` with working keys.\n');
+    stdout.write('\nNo valid keys to save. Re-run `surf-search-skill setup` with working keys.\n');
     return { addedTavily: 0, addedParallel: 0, addedBrave: 0, dropped };
   }
 

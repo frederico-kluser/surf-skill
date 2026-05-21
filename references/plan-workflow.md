@@ -1,4 +1,4 @@
-# surf-plan workflow — deeper docs
+# surf-plan-skill workflow — deeper docs
 
 This file expands on the 6-phase workflow defined in `SKILL.md`. It's
 for humans reviewing the methodology, not for the agent (which only
@@ -8,11 +8,11 @@ reads SKILL.md).
 
 ### Phase 0 — preflight
 
-Why: if `surf-skill` is missing, web research is impossible, and the
+Why: if `surf-search-skill` is missing, web research is impossible, and the
 plan would just be the agent's training-time hallucinations dressed up
 in markdown. Halt is the right move.
 
-How: `surf-skill --version` exits 0 → continue. Exits non-zero or
+How: `surf-search-skill --version` exits 0 → continue. Exits non-zero or
 command not found → halt with install instructions.
 
 ### Phase 1 — project discovery
@@ -34,7 +34,7 @@ Output: agent's mental model of "what already exists" + file paths.
 
 Why: ground the plan in 2026 best practices, not 2024 training data.
 
-How: ONE batched `surf-skill search` with 3 queries. Distill:
+How: ONE batched `surf-search-skill search` with 3 queries. Distill:
 - 3 dominant approaches
 - 2–3 common mistakes
 - 1–2 security/performance gotchas
@@ -56,7 +56,7 @@ preference (e.g., "Redis or Postgres for the queue?", "do we need
 multi-tenancy from day one?").
 
 How:
-- For each question: targeted `surf-skill search --max 2` first.
+- For each question: targeted `surf-search-skill search --max 2` first.
 - AskUserQuestion with options informed by the search.
 - Max 5 total.
 
@@ -127,7 +127,7 @@ If you genuinely need more, the task is too big — slice it.
 - URLs: full https links, no trackers or auth tokens.
 - Code references: `path/to/file.ext:LINE` format, parseable by most IDEs.
 
-## What surf-plan is NOT
+## What surf-plan-skill is NOT
 
 - Not an execution engine. Once the plan is written, hand it to another
   tool/agent/human.
