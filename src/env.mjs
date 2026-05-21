@@ -1,7 +1,9 @@
 // Key discovery for library mode.
 // Priority (each level can contribute; results merged + deduped):
-//   1. Explicit opts (opts.tavilyKey / opts.tavilyKeys / parallel*)
-//   2. process.env (TAVILY_API_KEYS comma-separated + TAVILY_API_KEY)
+//   1. Explicit opts (opts.tavilyKey / opts.tavilyKeys / parallel* / brave*)
+//   2. process.env  (TAVILY_API_KEYS comma-separated + TAVILY_API_KEY,
+//                    PARALLEL_API_KEYS + PARALLEL_API_KEY,
+//                    BRAVE_API_KEYS + BRAVE_API_KEY)
 //   3. .env file at process.cwd() (lightweight regex parser, no dotenv dep)
 //   4. ~/.config/surf/keys.json (CLI persistent store, fallback only)
 
@@ -39,73 +41,73 @@ function arrayify(v) {
   return Array.isArray(v) ? v.filter(Boolean) : [v].filter(Boolean);
 }
 
+function readFromObject(obj, base) {
+  // base = 'TAVILY' | 'PARALLEL' | 'BRAVE'
+  return [
+    ...splitCsv(obj[`${base}_API_KEYS`]),
+    obj[`${base}_API_KEY`],
+  ].filter(Boolean);
+}
+
 /**
- * Resolve API keys for both providers using the discovery hierarchy.
+ * Resolve API keys for all 3 providers using the discovery hierarchy.
  *
  * @param {object} opts
- * @param {string|string[]} [opts.tavilyKey] - single key or array
- * @param {string[]} [opts.tavilyKeys] - array (alias)
- * @param {string|string[]} [opts.parallelKey] - single or array
- * @param {string[]} [opts.parallelKeys] - array (alias)
- * @param {boolean} [opts.skipDotenv=false] - skip .env scanning
- * @param {boolean} [opts.skipConfigFile=false] - skip ~/.config/surf/keys.json
+ * @param {string|string[]} [opts.tavilyKey|opts.tavilyKeys]
+ * @param {string|string[]} [opts.parallelKey|opts.parallelKeys]
+ * @param {string|string[]} [opts.braveKey|opts.braveKeys]
+ * @param {boolean} [opts.skipDotenv=false]
+ * @param {boolean} [opts.skipConfigFile=false]
  * @param {string} [opts.cwd=process.cwd()]
- * @returns {Promise<{tavily: string[], parallel: string[]}>}
+ * @returns {Promise<{tavily: string[], parallel: string[], brave: string[]}>}
  */
 export async function discoverKeys(opts = {}) {
   const cwd = opts.cwd || process.cwd();
 
   // Level 1: explicit
-  const explicitTavily = [
-    ...arrayify(opts.tavilyKey),
-    ...arrayify(opts.tavilyKeys),
-  ];
-  const explicitParallel = [
-    ...arrayify(opts.parallelKey),
-    ...arrayify(opts.parallelKeys),
-  ];
+  const explicit = {
+    tavily:   [...arrayify(opts.tavilyKey),   ...arrayify(opts.tavilyKeys)],
+    parallel: [...arrayify(opts.parallelKey), ...arrayify(opts.parallelKeys)],
+    brave:    [...arrayify(opts.braveKey),    ...arrayify(opts.braveKeys)],
+  };
 
   // Level 2: process.env
-  const envTavily = [
-    ...splitCsv(process.env.TAVILY_API_KEYS),
-    process.env.TAVILY_API_KEY,
-  ].filter(Boolean);
-  const envParallel = [
-    ...splitCsv(process.env.PARALLEL_API_KEYS),
-    process.env.PARALLEL_API_KEY,
-  ].filter(Boolean);
+  const env = {
+    tavily:   readFromObject(process.env, 'TAVILY'),
+    parallel: readFromObject(process.env, 'PARALLEL'),
+    brave:    readFromObject(process.env, 'BRAVE'),
+  };
 
   // Level 3: .env file
-  let dotenvTavily = [];
-  let dotenvParallel = [];
+  let dotenv = { tavily: [], parallel: [], brave: [] };
   if (!opts.skipDotenv) {
-    const env = await loadDotenv(cwd);
-    dotenvTavily = [
-      ...splitCsv(env.TAVILY_API_KEYS),
-      env.TAVILY_API_KEY,
-    ].filter(Boolean);
-    dotenvParallel = [
-      ...splitCsv(env.PARALLEL_API_KEYS),
-      env.PARALLEL_API_KEY,
-    ].filter(Boolean);
+    const parsed = await loadDotenv(cwd);
+    dotenv = {
+      tavily:   readFromObject(parsed, 'TAVILY'),
+      parallel: readFromObject(parsed, 'PARALLEL'),
+      brave:    readFromObject(parsed, 'BRAVE'),
+    };
   }
 
-  // Level 4: ~/.config/surf/keys.json (only if nothing yet from 1-3)
-  let cfgTavily = [];
-  let cfgParallel = [];
-  const noneSoFarTavily = !explicitTavily.length && !envTavily.length && !dotenvTavily.length;
-  const noneSoFarParallel = !explicitParallel.length && !envParallel.length && !dotenvParallel.length;
-  if (!opts.skipConfigFile && (noneSoFarTavily || noneSoFarParallel)) {
-    try {
-      const state = await loadState();
-      if (noneSoFarTavily) cfgTavily = state.tavily.keys || [];
-      if (noneSoFarParallel) cfgParallel = state.parallel.keys || [];
-    } catch {}
+  // Level 4: ~/.config/surf/keys.json (per-provider, only if 1-3 are empty
+  // for that provider)
+  const cfg = { tavily: [], parallel: [], brave: [] };
+  if (!opts.skipConfigFile) {
+    const needCfg = (p) => !explicit[p].length && !env[p].length && !dotenv[p].length;
+    if (needCfg('tavily') || needCfg('parallel') || needCfg('brave')) {
+      try {
+        const state = await loadState();
+        if (needCfg('tavily'))   cfg.tavily   = state.tavily.keys   || [];
+        if (needCfg('parallel')) cfg.parallel = state.parallel.keys || [];
+        if (needCfg('brave'))    cfg.brave    = state.brave.keys    || [];
+      } catch {}
+    }
   }
 
   return {
-    tavily: [...new Set([...explicitTavily, ...envTavily, ...dotenvTavily, ...cfgTavily])],
-    parallel: [...new Set([...explicitParallel, ...envParallel, ...dotenvParallel, ...cfgParallel])],
+    tavily:   [...new Set([...explicit.tavily,   ...env.tavily,   ...dotenv.tavily,   ...cfg.tavily])],
+    parallel: [...new Set([...explicit.parallel, ...env.parallel, ...dotenv.parallel, ...cfg.parallel])],
+    brave:    [...new Set([...explicit.brave,    ...env.brave,    ...dotenv.brave,    ...cfg.brave])],
   };
 }
 
@@ -114,11 +116,12 @@ export async function discoverKeys(opts = {}) {
  * without touching ~/.config/surf/keys.json.
  */
 export async function buildInMemoryState(opts = {}) {
-  const { tavily, parallel } = await discoverKeys(opts);
+  const { tavily, parallel, brave } = await discoverKeys(opts);
   return {
     schema_version: 1,
-    tavily: { keys: tavily, current: 0, burned: [] },
+    tavily:   { keys: tavily,   current: 0, burned: [] },
     parallel: { keys: parallel, current: 0, burned: [] },
+    brave:    { keys: brave,    current: 0, burned: [] },
     last_ok_provider: null,
     _inMemory: true,
   };

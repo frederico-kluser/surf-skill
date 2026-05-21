@@ -1,6 +1,6 @@
-// Credit estimation. We model both providers on the same "credit" scale that
-// Tavily uses (since that's the only published one). Parallel costs are
-// estimated coarsely from documented processor tiers.
+// Credit estimation. We model all providers on a unified "credit" scale
+// (Tavily uses real credits; Parallel uses processor tiers we map; Brave is
+// metered in USD per query, which we model as 1 credit per search).
 
 import { clamp, ceilDiv } from './flags.mjs';
 
@@ -68,10 +68,23 @@ function estimateParallel(op, args) {
   }
 }
 
+// Brave — metered at ~$0.003/query for /web/search; we report 1 credit as
+// a proxy so the cost guard never blocks Brave searches. Operations Brave
+// doesn't support return Infinity so the chain estimator skips them.
+function estimateBrave(op, _args) {
+  switch (op) {
+    case 'search': return 1;
+    default:        return Infinity;
+  }
+}
+
 export function estimateCreditsForChain(operation, args, chain) {
   let worst = 0;
   for (const p of chain) {
-    const est = p === 'tavily' ? estimateTavily(operation, args) : estimateParallel(operation, args);
+    const est = p === 'tavily'   ? estimateTavily(operation, args)
+              : p === 'parallel' ? estimateParallel(operation, args)
+              : p === 'brave'    ? estimateBrave(operation, args)
+              : 0;
     if (Number.isFinite(est) && est > worst) worst = est;
   }
   return worst;

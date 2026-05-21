@@ -83,9 +83,16 @@ function wrap(operation, raw, data, latency_ms) {
 }
 
 async function search(args, ctx) {
+  // Mode (canonical) → Tavily search_depth. Falls back to --depth (legacy
+  // alias) and finally to 'basic'.
+  const depth = args.mode === 'fast'   ? 'fast'
+              : args.mode === 'normal' ? 'basic'
+              : args.mode === 'slow'   ? 'advanced'
+              : (args.depth || 'basic');
+
   const body = compactObject({
     query: args.query,
-    search_depth: args.depth || 'basic',
+    search_depth: depth,
     max_results: clamp(Number(args.max) || 5, 1, 20),
     topic: args.topic,
     time_range: args.time,

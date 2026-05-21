@@ -137,6 +137,7 @@ export async function ensureKeysSkeleton() {
       schema_version: 1,
       tavily: { keys: [], current: 0, burned: [] },
       parallel: { keys: [], current: 0, burned: [] },
+      brave: { keys: [], current: 0, burned: [] },
       last_ok_provider: null,
     };
     await fs.writeFile(file, JSON.stringify(skeleton, null, 2) + '\n');

@@ -14,7 +14,7 @@ export const LOCK_FILE = join(CONFIG_DIR, '.keys.lock');
 export const CACHE_DIR = join(homedir(), '.cache', 'surf');
 export const LEGACY_CACHE_DIR = join(homedir(), '.cache', 'tavily-skill');
 
-export const PROVIDERS = ['tavily', 'parallel'];
+export const PROVIDERS = ['tavily', 'parallel', 'brave'];
 export const SCHEMA_VERSION = 1;
 
 const BURNED_CAP = 50;
@@ -24,12 +24,9 @@ function blankProvider() {
 }
 
 function blankState() {
-  return {
-    schema_version: SCHEMA_VERSION,
-    tavily: blankProvider(),
-    parallel: blankProvider(),
-    last_ok_provider: null,
-  };
+  const s = { schema_version: SCHEMA_VERSION, last_ok_provider: null };
+  for (const p of PROVIDERS) s[p] = blankProvider();
+  return s;
 }
 
 async function ensureConfigDir() {
@@ -115,6 +112,23 @@ export async function migrateLegacy() {
   }
 }
 
+// Normalize a parsed keys.json to the current schema. Crucially, this
+// auto-adds any provider section that's missing from older keys.json files
+// (e.g. v2.0.x users upgrading to v2.1.x get a fresh `brave` section without
+// any manual migration step).
+function normalizeFullState(parsed) {
+  const out = {
+    schema_version: (parsed && parsed.schema_version) || SCHEMA_VERSION,
+    last_ok_provider: parsed && PROVIDERS.includes(parsed.last_ok_provider)
+      ? parsed.last_ok_provider
+      : null,
+  };
+  for (const p of PROVIDERS) {
+    out[p] = normalizeProvider(parsed && parsed[p]);
+  }
+  return out;
+}
+
 export async function loadState({ skipMonthlyReset = false } = {}) {
   await ensureConfigDir();
   let raw = blankState();
@@ -122,12 +136,7 @@ export async function loadState({ skipMonthlyReset = false } = {}) {
     try {
       const txt = await readFile(KEYS_FILE, 'utf8');
       const parsed = JSON.parse(txt);
-      raw = {
-        schema_version: parsed.schema_version || SCHEMA_VERSION,
-        tavily: normalizeProvider(parsed.tavily),
-        parallel: normalizeProvider(parsed.parallel),
-        last_ok_provider: PROVIDERS.includes(parsed.last_ok_provider) ? parsed.last_ok_provider : null,
-      };
+      raw = normalizeFullState(parsed);
     } catch {
       raw = blankState();
     }
@@ -142,12 +151,7 @@ export async function saveStateAtomic(state) {
   await ensureConfigDir();
   await acquireLock();
   try {
-    const safe = {
-      schema_version: SCHEMA_VERSION,
-      tavily: normalizeProvider(state.tavily),
-      parallel: normalizeProvider(state.parallel),
-      last_ok_provider: PROVIDERS.includes(state.last_ok_provider) ? state.last_ok_provider : null,
-    };
+    const safe = normalizeFullState(state);
     const tmp = KEYS_FILE + '.tmp';
     const payload = JSON.stringify(safe, null, 2);
     await writeFile(tmp, payload, { mode: 0o600 });

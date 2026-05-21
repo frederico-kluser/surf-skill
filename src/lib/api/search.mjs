@@ -63,7 +63,8 @@ export async function search(query, opts = {}) {
 function buildArgs(query, opts) {
   return {
     query,
-    depth: opts.depth || 'advanced',
+    mode: opts.mode, // 'fast' | 'normal' | 'slow' (per-provider mapping)
+    depth: opts.depth || (opts.mode ? undefined : 'advanced'),
     max: opts.max,
     topic: opts.topic,
     time: opts.time,

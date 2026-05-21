@@ -18,20 +18,20 @@
 
 ---
 
-**One command. Two providers. Zero MCP.** Install with `npm i -g surf-skill`. The agent
-calling this skill **never picks the provider** — `surf-skill` does.
+**One command. Three providers. Zero MCP.** Install with `npm i -g surf-skill`.
+The agent calling this skill **never picks the provider** — `surf-skill` does.
 
 ```
-search ─┐
-extract ┤            ┌──▶ Tavily   (search, extract, crawl, map, research)
-crawl ──┼──▶ surf ───┤
-map  ───┤            └──▶ Parallel (search, extract, research async)
-research┘
+search ─┐            ┌──▶ Tavily   (search, extract, crawl, map, research)
+extract ┤            │
+crawl ──┼──▶ surf ───┼──▶ Parallel (search, extract, research async)
+map  ───┤            │
+research┘            └──▶ Brave    (search only — own index)
 ```
 
 | | |
 |---|---|
-| **Status** | v2.0.0 (npm) |
+| **Status** | v2.1.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Runtime** | Node ≥ 18. Zero npm deps. |
 | **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime by the CLI. |
@@ -216,7 +216,7 @@ If you see timeouts, the order of fixes:
 |---|---|---|
 | `setup` | Interactive wizard to add keys (TTY) | n/a |
 | `project-config` | Write per-project bash-timeout config | n/a |
-| `search <q> [q2 ...]` | Web search; multiple positional args = **batch** | tavily, parallel |
+| `search <q> [q2 ...]` | Web search; multiple positional args = **batch** | tavily, parallel, **brave** |
 | `extract <url> ...` | Pull markdown from URLs | tavily, parallel |
 | `crawl <url>` | Recursive site crawl | tavily |
 | `map <url>` | Sitemap discovery | tavily |
@@ -233,13 +233,33 @@ Full reference: `skills/surf-skill/SKILL.md`.
 Global flags every command accepts:
 
 ```
---provider <tavily|parallel>   Force provider (disables fallback)
---no-fallback                  Keep default provider, no cross-provider fallback
---no-cache                     Skip response cache
---json                         Normalized envelope as JSON
---raw-json                     Raw provider response (bypasses cache)
---confirm-expensive            Allow operations estimated > 10 credits
---quiet                        Silence progress logs (stderr)
+--provider <tavily|parallel|brave>  Force provider (disables fallback)
+--mode <fast|normal|slow>           Search tier. Per-provider mapping:
+                                      fast   = Tavily depth=fast / Brave count=5
+                                      normal = default
+                                      slow   = Tavily depth=advanced / Brave count=20
+                                      (Parallel ignores — single mode.)
+--no-fallback                       Keep default provider, no cross-provider fallback
+--no-cache                          Skip response cache
+--json                              Normalized envelope as JSON
+--raw-json                          Raw provider response (bypasses cache)
+--confirm-expensive                 Allow operations estimated > 10 credits
+--quiet                             Silence progress logs (stderr)
+```
+
+### Search modes
+
+```bash
+surf-skill search "X" --mode fast    # 5 results / 1 credit Tavily / minimal latency
+surf-skill search "X" --mode normal  # 10 results / default everywhere
+surf-skill search "X" --mode slow    # 20 results / Tavily advanced / deeper signal
+```
+
+Want to force a specific provider for a given mode?
+
+```bash
+surf-skill search "X" --provider brave --mode slow    # 20 brave results, no fallback
+surf-skill search "X" --provider tavily --mode fast   # Tavily fast tier
 ```
 
 ---

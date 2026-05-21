@@ -1,5 +1,77 @@
 # Changelog
 
+## v2.1.0 — Brave Search as 3rd provider + `--mode` flag
+
+### What's new
+
+- **Brave Search added as 3rd provider** (`--provider brave`). Brave runs
+  its own index (independent from Google/Bing) and currently offers $5/mo
+  in API credit + metered usage (~$0.003/query) after the free tier was
+  retired in Feb 2026. Search only — Brave has no extract/crawl/map/
+  research equivalents, so the capability map keeps those Tavily-only.
+- **New `--mode <fast|normal|slow>` flag** for `search`. Each provider
+  translates the mode to its native tier:
+
+  | Mode | Tavily | Parallel | Brave |
+  |---|---|---|---|
+  | `fast`   | `search_depth=fast` | (ignored) | `count=5` |
+  | `normal` | `search_depth=basic` | `/v1/search` | `count=10` |
+  | `slow`   | `search_depth=advanced` | (ignored) | `count=20` |
+
+  `--depth basic|advanced` continues to work as a legacy alias for Tavily.
+
+- **Library API gets `opts.mode`, `opts.braveKey`, `opts.braveKeys`**:
+  ```js
+  await search('claude api', { mode: 'fast', braveKey: 'BS...' });
+  ```
+
+- **`BRAVE_API_KEY` / `BRAVE_API_KEYS` env vars** now part of the discovery
+  hierarchy (env > .env > ~/.config/surf/keys.json).
+
+- **Setup wizard** now prompts for Brave keys after Tavily + Parallel.
+
+- **State migration is transparent**: existing `~/.config/surf/keys.json`
+  files from v2.0.x get a `brave` section added automatically on next
+  `loadState()` — no manual upgrade step needed.
+
+### Default chain order
+
+`search` chain is now `[tavily, parallel, brave]`. Existing users see no
+behavior change (Tavily still tried first); Brave is the 3rd fallback.
+`last_ok_provider` still wins.
+
+### Breaking changes
+
+None. CLI and library APIs are backward compatible.
+
+### Files added
+
+- `src/lib/providers/brave.mjs` — adapter, `mapError()`, `/web/search`
+  with mode → count translation.
+
+### Files modified
+
+- `src/lib/providers/index.mjs` — register brave + add to capabilityMap.search
+- `src/lib/state.mjs` — `PROVIDERS = ['tavily', 'parallel', 'brave']` +
+  `normalizeFullState()` for graceful schema migration
+- `src/env.mjs` — `discoverKeys()` returns `{ tavily, parallel, brave }`
+- `src/lib/cost.mjs` — `estimateBrave()` returns 1 credit/search
+- `src/lib/setup.mjs` — 3-provider wizard
+- `src/lib/providers/tavily.mjs` — mode → search_depth resolution
+- `src/lib/api/search.mjs` — library opts.mode
+- `bin/surf-skill.mjs` — HELP + `--mode` flag wiring
+- `src/lib/harness-install.mjs` — skeleton with brave section
+- `package.json`, `SKILL.md`, `README.md` — bump 2.0.0 → 2.1.0, doc updates
+
+### Fora de escopo
+
+- Brave `/summarizer/search` endpoint — defer to v2.2 (different rate
+  limit, response shape adds `data.answer`).
+- Brave Goggles support (`--goggle <id>`) — defer.
+- News / Images / Videos / Local / Spellcheck endpoints — defer.
+
+---
+
 ## v2.0.0 — npm package, cross-OS install, library mode
 
 ### What's new
