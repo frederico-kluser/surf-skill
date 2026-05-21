@@ -120,14 +120,18 @@ function backoff(attempt) {
   return Math.min(1500 * (attempt + 1) ** 2, 8000);
 }
 
-export async function dispatch(operation, args, flags = {}) {
+export async function dispatch(operation, args, flags = {}, runCtx = {}) {
   const startTs = Date.now();
   const harnessBudget = detectHarnessBudgetMs();
   const harnessName = detectHarnessName();
   // Reserve a cushion so we surface the error before the harness kills us.
   const cushion = Math.min(2000, Math.floor(harnessBudget * 0.1));
 
-  const state = await loadState();
+  // Library mode: caller can pass an in-memory state object to avoid touching
+  // ~/.config/surf/keys.json. State mutations (last_ok_provider, burned) stay
+  // in-memory and don't get persisted when runCtx.state._inMemory is true.
+  const state = runCtx.state || await loadState();
+  const persistState = !state._inMemory;
   let cachedHit = null;
   let cKey = null;
 
@@ -256,7 +260,7 @@ export async function dispatch(operation, args, flags = {}) {
           if (kind === 'auth') {
             progress.warn(`${providerName} key #${keyIdx} burned (${e.statusCode || 'auth'})`);
             markBurned(state, providerName, keyIdx, String(e.statusCode || 'auth'));
-            await saveStateAtomic(state);
+            if (persistState) await saveStateAtomic(state);
             break; // next key
           }
           if (kind === 'server_5xx') {
@@ -264,7 +268,7 @@ export async function dispatch(operation, args, flags = {}) {
             if (consecutive5xx >= 3) {
               progress.warn(`${providerName} key #${keyIdx} burned (5xx x3)`);
               markBurned(state, providerName, keyIdx, '5xx');
-              await saveStateAtomic(state);
+              if (persistState) await saveStateAtomic(state);
               break; // next key
             }
             if (attempt < 2) {
@@ -281,7 +285,7 @@ export async function dispatch(operation, args, flags = {}) {
       if (success) {
         state.last_ok_provider = providerName;
         state[providerName].current = keyIdx;
-        await saveStateAtomic(state);
+        if (persistState) await saveStateAtomic(state);
         await recordUsage({
           op: operation,
           provider: providerName,

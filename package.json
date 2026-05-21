@@ -1,9 +1,47 @@
 {
   "name": "surf-skill",
-  "version": "1.0.0",
-  "description": "Multi-provider web skill (Tavily + Parallel AI) for Pi, OpenCode, Claude Code, Codex CLI, and GitHub Copilot CLI. Automatic provider fallback + multi-key rotation.",
-  "license": "MIT",
-  "author": "frederico-kluser",
+  "version": "2.0.0",
+  "description": "Multi-provider web skill (Tavily + Parallel AI) for AI coding agents — CLI + Node library + Anthropic Agent Skill. Auto-fallback, multi-key rotation, per-project timeout config.",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "surf-skill": "./bin/surf-skill.mjs"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "references/",
+    "SKILL.md",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "postinstall": "node ./src/install/postinstall.mjs || true",
+    "preuninstall": "node ./src/install/preuninstall.mjs || true",
+    "test:syntax": "node --check bin/surf-skill.mjs && for f in src/index.mjs src/env.mjs src/install/*.mjs src/lib/*.mjs src/lib/providers/*.mjs src/lib/api/*.mjs; do node --check \"$f\" || exit 1; done && echo syntax-ok"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "agent-skill",
+    "tavily",
+    "parallel-ai",
+    "web-search",
+    "connector",
+    "claude-code",
+    "copilot-cli",
+    "pi-coding-agent",
+    "anthropic-skill",
+    "fallback",
+    "multi-provider",
+    "research"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/frederico-kluser/surf-skill.git"
@@ -12,21 +50,6 @@
   "bugs": {
     "url": "https://github.com/frederico-kluser/surf-skill/issues"
   },
-  "keywords": [
-    "pi-package",
-    "agent-skill",
-    "tavily",
-    "parallel-ai",
-    "web-search",
-    "connector",
-    "pi-coding-agent"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "pi": {
-    "skills": [
-      "./skills"
-    ]
-  }
+  "license": "MIT",
+  "author": "frederico-kluser"
 }
