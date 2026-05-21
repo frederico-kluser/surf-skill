@@ -1,5 +1,93 @@
 # Changelog
 
+## v3.0.0 — multi-skill bundle: surf-skill + surf-plan-skill + `surf` wrapper with live key validation
+
+### What's new
+
+This release reshapes the package from one skill into **two skills + a
+top-level setup wrapper**, all installed by `npm i -g surf-skill`.
+
+**New skill: `surf-plan-skill`** — research-driven execution planning
+that follows a strict 6-phase workflow (preflight → project discovery →
+baseline web research → conversation → clarifying questions each backed
+by search → synthesis search → write Markdown plan with `[^N]` cited
+footnotes). Triggers on "make a plan", "design X", "architect Y", etc.
+Plans land in `~/.claude/plans/` (or `./plans/` if it exists).
+
+**New CLI: `surf`** — the friendliest entry point. Interactive setup
+wizard that:
+- Detects both skills in all 4 harness skill dirs.
+- Lists configured keys per provider (masked).
+- **Validates every key against its provider's real API before saving**
+  (1-credit cost, 1-3s per key). Invalid keys are dropped with a clear
+  error; valid keys are saved.
+- Re-validates existing keys on demand.
+
+**Validation is now mandatory at every key-add path**:
+- `surf` interactive add: live-validates before saving.
+- `surf-skill setup`: validates each freshly-collected key in the wizard
+  batch; drops invalid; reports a summary.
+- `surf-skill keys add --provider X <key>`: validates before saving.
+  Opt out with `--skip-validate` (for known-good or offline scenarios).
+
+### Bins shipped (3)
+
+- `surf` — interactive setup + key validation (new)
+- `surf-skill` — search engine (unchanged surface; 3.0.0 internal)
+- `surf-plan-skill` — planning skill CLI (list/show/new/doctor)
+
+### Package layout
+
+```
+surf-skill/
+├── bin/{surf,surf-skill,surf-plan-skill}.mjs
+├── SKILL.md                        # surf-skill skill (root)
+├── skills/surf-plan-skill/SKILL.md # surf-plan-skill (planning)
+├── src/
+│   ├── index.mjs                   # library entry (search + extract + ...)
+│   ├── plan/                       # plan-file, plans-dir, slug
+│   ├── validators/                 # per-provider key validators
+│   ├── lib/                        # adapters, dispatch, state, cost, ...
+│   └── install/                    # postinstall + preuninstall
+└── references/
+```
+
+### Postinstall (cross-OS)
+
+Each of the 4 supported harness skill dirs now gets **2 symlinks**:
+
+- `<harness>/surf-skill`      → package root (search skill)
+- `<harness>/surf-plan-skill` → `skills/surf-plan-skill/` (planning skill)
+
+Harnesses: `~/.agents/skills`, `~/.claude/skills`, `~/.codex/skills`,
+`~/.pi/agent/skills`. Symlink on POSIX + Windows-with-Developer-Mode;
+falls back to recursive copy on Windows without it.
+
+Existing v2.x users: the surf-skill symlink still points at package root
+(unchanged); the new surf-plan-skill symlink is added.
+
+### Migration from v2.x
+
+```bash
+npm i -g surf-skill           # picks up v3.0.0
+surf doctor                   # confirm both skills + keys
+surf                          # interactive — add more keys if needed
+```
+
+Your existing `~/.config/surf/keys.json` is preserved. CLI commands
+that worked in v2.x still work in v3.0.0 (no breaking flag changes;
+only additive behavior: validation defaults on for `keys add`, opt out
+with `--skip-validate` if needed).
+
+### Migration from the standalone `surf-plan` v1.0.0 (now retired)
+
+The standalone `frederico-kluser/surf-plan` repo and the unpublished
+`surf-plan` npm name are retired. Use `npm i -g surf-skill` — it bundles
+the planning skill as `surf-plan-skill`. The SKILL.md frontmatter name
+changed from `surf-plan` → `surf-plan-skill`.
+
+---
+
 ## v2.1.1 — Robust key rotation: Brave 422 now burns the key
 
 ### Bug

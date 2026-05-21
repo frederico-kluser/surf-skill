@@ -2,6 +2,7 @@
 
 import { loadState, saveStateAtomic, clearBurned, PROVIDERS, KEYS_FILE } from './state.mjs';
 import { maskKey } from './flags.mjs';
+import { validateKey, formatValidation } from '../validators/index.mjs';
 
 function nextResetIso(burnedAt) {
   const d = new Date(burnedAt);
@@ -25,15 +26,39 @@ function requireProvider(flags, allowAll = false) {
 export async function keysAdd(pos, flags) {
   const provider = requireProvider(flags);
   const key = pos[0];
-  if (!key) throw new Error('Usage: surf-skill keys add --provider <name> <key>');
+  if (!key) throw new Error('Usage: surf-skill keys add --provider <name> <key> [--skip-validate]');
   const state = await loadState();
   if (state[provider].keys.includes(key)) {
     return { provider, added: false, reason: 'already exists', state };
   }
+
+  // Live-validate the key against the provider's API (1 credit, ~1-3s)
+  // before saving. Opt out with --skip-validate (e.g. for offline tests
+  // or when burning through a known-good key list).
+  let validation = null;
+  if (!flags['skip-validate']) {
+    validation = await validateKey(provider, key);
+    if (!validation.valid) {
+      return {
+        provider,
+        added: false,
+        reason: `validation failed: ${formatValidation(validation)}`,
+        validation,
+        state,
+      };
+    }
+  }
+
   state[provider].keys.push(key);
   if (state[provider].keys.length === 1) state[provider].current = 0;
   await saveStateAtomic(state);
-  return { provider, added: true, index: state[provider].keys.length - 1, state };
+  return {
+    provider,
+    added: true,
+    index: state[provider].keys.length - 1,
+    validation,
+    state,
+  };
 }
 
 export async function keysRemove(pos, flags) {

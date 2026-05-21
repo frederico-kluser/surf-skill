@@ -7,6 +7,7 @@
 import readline from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { loadState, saveStateAtomic, KEYS_FILE } from './state.mjs';
+import { validateKey, formatValidation } from '../validators/index.mjs';
 
 const BANNER = `
 ┌─ surf-skill setup ──────────────────────────────────────
@@ -103,9 +104,43 @@ export async function runSetup() {
     return { addedTavily: 0, addedParallel: 0, addedBrave: 0 };
   }
 
-  for (const k of newTav) state.tavily.keys.push(k);
-  for (const k of newPar) state.parallel.keys.push(k);
-  for (const k of newBrv) state.brave.keys.push(k);
+  // Live-validate every freshly collected key before persisting. Invalid
+  // keys are dropped from the batch with a clear message. The user
+  // doesn't waste hours wondering why fallback isn't kicking in.
+  stdout.write('\n— Validating new keys against each provider (1 credit each) —\n');
+  const keptTav = [];
+  for (const k of newTav) {
+    stdout.write(`  tavily ${k.slice(0, 5)}…${k.slice(-4)} → `);
+    const r = await validateKey('tavily', k);
+    stdout.write(formatValidation(r) + '\n');
+    if (r.valid) keptTav.push(k);
+  }
+  const keptPar = [];
+  for (const k of newPar) {
+    stdout.write(`  parallel ${k.slice(0, 5)}…${k.slice(-4)} → `);
+    const r = await validateKey('parallel', k);
+    stdout.write(formatValidation(r) + '\n');
+    if (r.valid) keptPar.push(k);
+  }
+  const keptBrv = [];
+  for (const k of newBrv) {
+    stdout.write(`  brave ${k.slice(0, 5)}…${k.slice(-4)} → `);
+    const r = await validateKey('brave', k);
+    stdout.write(formatValidation(r) + '\n');
+    if (r.valid) keptBrv.push(k);
+  }
+  const dropped = (newTav.length - keptTav.length) + (newPar.length - keptPar.length) + (newBrv.length - keptBrv.length);
+  if (dropped) {
+    stdout.write(`\n⚠ ${dropped} key${dropped === 1 ? '' : 's'} failed validation and were NOT saved.\n`);
+  }
+  if (!keptTav.length && !keptPar.length && !keptBrv.length) {
+    stdout.write('\nNo valid keys to save. Re-run `surf-skill setup` with working keys.\n');
+    return { addedTavily: 0, addedParallel: 0, addedBrave: 0, dropped };
+  }
+
+  for (const k of keptTav) state.tavily.keys.push(k);
+  for (const k of keptPar) state.parallel.keys.push(k);
+  for (const k of keptBrv) state.brave.keys.push(k);
   if (state.tavily.keys.length && state.tavily.current >= state.tavily.keys.length) state.tavily.current = 0;
   if (state.parallel.keys.length && state.parallel.current >= state.parallel.keys.length) state.parallel.current = 0;
   if (state.brave.keys.length && state.brave.current >= state.brave.keys.length) state.brave.current = 0;
@@ -118,8 +153,9 @@ export async function runSetup() {
     brv: state.brave.keys.length,
   }));
   return {
-    addedTavily: newTav.length,
-    addedParallel: newPar.length,
-    addedBrave: newBrv.length,
+    addedTavily: keptTav.length,
+    addedParallel: keptPar.length,
+    addedBrave: keptBrv.length,
+    dropped,
   };
 }

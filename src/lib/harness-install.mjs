@@ -78,14 +78,28 @@ export async function unlinkIfOurs(link, expectedTarget) {
   }
 }
 
+// Install BOTH skills shipped by this package:
+//   - surf-skill       → pkgRoot           (root SKILL.md, search engine)
+//   - surf-plan-skill  → pkgRoot/skills/surf-plan-skill/  (planning workflow)
+//
+// Each harness gets 2 symlinks: ~/.claude/skills/surf-skill and
+// ~/.claude/skills/surf-plan-skill (and same for .agents/.codex/.pi).
+const SKILLS = [
+  { name: 'surf-skill',      subdir: null },              // root of package
+  { name: 'surf-plan-skill', subdir: 'skills/surf-plan-skill' },
+];
+
 export async function installSkill(pkgRoot) {
   const results = [];
   for (const dir of HARNESS_DIRS) {
     try {
       await fs.mkdir(dir, { recursive: true });
-      const link = path.join(dir, 'surf-skill');
-      const r = await symlinkOrCopy(pkgRoot, link);
-      results.push({ dir: link, ...r });
+      for (const s of SKILLS) {
+        const target = s.subdir ? path.join(pkgRoot, s.subdir) : pkgRoot;
+        const link = path.join(dir, s.name);
+        const r = await symlinkOrCopy(target, link);
+        results.push({ dir: link, skill: s.name, ...r });
+      }
     } catch (e) {
       results.push({ dir, action: 'error', error: e.message });
     }
@@ -96,12 +110,15 @@ export async function installSkill(pkgRoot) {
 export async function uninstallSkill(pkgRoot) {
   const results = [];
   for (const dir of HARNESS_DIRS) {
-    const link = path.join(dir, 'surf-skill');
-    try {
-      const removed = await unlinkIfOurs(link, pkgRoot);
-      results.push({ dir: link, removed });
-    } catch (e) {
-      results.push({ dir: link, removed: false, error: e.message });
+    for (const s of SKILLS) {
+      const expectedTarget = s.subdir ? path.join(pkgRoot, s.subdir) : pkgRoot;
+      const link = path.join(dir, s.name);
+      try {
+        const removed = await unlinkIfOurs(link, expectedTarget);
+        results.push({ dir: link, skill: s.name, removed });
+      } catch (e) {
+        results.push({ dir: link, skill: s.name, removed: false, error: e.message });
+      }
     }
   }
   return results;

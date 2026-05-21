@@ -15,7 +15,7 @@ import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '2.1.1';
+const VERSION = '3.0.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -445,8 +445,19 @@ async function cmdKeys(pos, flags) {
     if (flags.json) {
       out(JSON.stringify(result, null, 2));
     } else if (sub === 'add') {
-      if (result.added) out(`✓ added [${result.index}] to ${result.provider}`);
-      else out(`already exists in ${result.provider} (no-op)`);
+      if (result.added) {
+        if (result.validation) {
+          out(`✓ validated (${result.validation.latency_ms}ms, ${result.validation.credits} credit${result.validation.credits === 1 ? '' : 's'})`);
+        }
+        out(`✓ added [${result.index}] to ${result.provider}`);
+      } else if (result.validation && !result.validation.valid) {
+        const { formatValidation } = await import('../src/validators/index.mjs');
+        out(formatValidation(result.validation));
+        out(`✗ NOT saved (re-run with --skip-validate to add anyway)`);
+        process.exitCode = 1;
+      } else {
+        out(`already exists in ${result.provider} (no-op)`);
+      }
     } else if (sub === 'remove' || sub === 'rm' || sub === 'delete') {
       out(`✓ removed index ${result.index} from ${result.provider}`);
     } else if (sub === 'reset') {
