@@ -22,14 +22,23 @@ const isGlobal = process.env.npm_config_global === 'true';
 // __dirname is under a global node_modules path as "global enough".
 const looksGlobal = /node_modules\/surf-skill\/src\/install$/.test(__dirname) ||
                     /node_modules\\surf-skill\\src\\install$/.test(__dirname);
+// Dev override: `SURF_DEV=1 node src/install/postinstall.mjs` simulates the
+// global install from the source checkout (used by `npm run dev:install`).
+const isDev = process.env.SURF_DEV === '1';
 
 async function main() {
-  if (!isGlobal && !looksGlobal) {
+  if (!isGlobal && !looksGlobal && !isDev) {
     // Local install: don't touch user system. Library mode.
     process.stdout.write('surf-skill installed as a library (npm i surf-skill).\n');
     process.stdout.write('  → For the global CLI: npm i -g surf-skill\n');
     process.stdout.write('  → To import: import { search } from "surf-skill"\n');
     return;
+  }
+
+  if (isDev) {
+    process.stdout.write('⚙ SURF_DEV=1 — simulating global install from local checkout\n');
+    process.stdout.write(`  symlinks will point at: ${pkgRoot}\n`);
+    process.stdout.write('  undo with: npm run dev:uninstall\n\n');
   }
 
   // Cleanup legacy symlinks from earlier versions BEFORE creating new ones.

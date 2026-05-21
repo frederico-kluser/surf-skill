@@ -29,6 +29,16 @@
   "scripts": {
     "postinstall": "node ./src/install/postinstall.mjs || true",
     "preuninstall": "node ./src/install/preuninstall.mjs || true",
+    "build": "npm run test:syntax",
+    "predev": "npm run build",
+    "dev": "node ./bin/surf.mjs",
+    "predev:search": "npm run build",
+    "dev:search": "node ./bin/surf-search-skill.mjs",
+    "predev:plan": "npm run build",
+    "dev:plan": "node ./bin/surf-plan-skill.mjs",
+    "predev:install": "npm run build",
+    "dev:install": "SURF_DEV=1 node ./src/install/postinstall.mjs",
+    "dev:uninstall": "SURF_DEV=1 node ./src/install/preuninstall.mjs",
     "test:syntax": "node --check bin/surf.mjs && node --check bin/surf-search-skill.mjs && node --check bin/surf-plan-skill.mjs && for f in src/index.mjs src/env.mjs src/install/*.mjs src/lib/*.mjs src/lib/providers/*.mjs src/lib/api/*.mjs src/plan/*.mjs src/validators/*.mjs; do node --check \"$f\" || exit 1; done && echo syntax-ok"
   },
   "engines": {
