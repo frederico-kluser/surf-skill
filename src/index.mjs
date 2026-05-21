@@ -1,12 +1,15 @@
-// surf-skill — library entry point.
-// Named exports for each operation. CLI is at bin/surf-skill.mjs.
+// surf-skill — library entry point (npm package name = `surf-skill`).
+// Named exports for each operation. CLI bins live at:
+//   bin/surf.mjs              (interactive setup + key validation)
+//   bin/surf-search-skill.mjs (multi-provider web search CLI)
+//   bin/surf-plan-skill.mjs   (research-grounded planning CLI)
 //
 // Usage:
 //   import { search, extract, research } from 'surf-skill';
 //   const r = await search('claude api', { max: 3 });
 //
 // Keys are auto-discovered (opts > process.env > .env > ~/.config/surf/keys.json).
-// Pass `tavilyKeys: [...]` / `parallelKeys: [...]` to override.
+// Pass `tavilyKeys: [...]` / `parallelKeys: [...]` / `braveKeys: [...]` to override.
 
 export { search } from './lib/api/search.mjs';
 export { extract } from './lib/api/extract.mjs';

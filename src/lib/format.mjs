@@ -73,7 +73,7 @@ export function fmtResearchStart(envelope) {
     `- model: ${r.model || '—'}`,
     `- status: ${r.status}`,
     '',
-    `Poll with: \`surf-skill research-poll ${r.request_id}\``,
+    `Poll with: \`surf-search-skill research-poll ${r.request_id}\``,
     footer(envelope),
   ].join('\n');
 }

@@ -1,4 +1,4 @@
-// `surf-skill project-config` — writes per-project harness config to raise
+// `surf-search-skill project-config` — writes per-project harness config to raise
 // the bash timeout that the harness uses. Detects which harness is in use
 // from the presence of `.github/`, `.claude/`, `.pi/` in the cwd. With
 // --harness, forces a specific target.
@@ -15,7 +15,7 @@ const PATCHES = {
   copilot: {
     file: '.github/copilot-hooks.json',
     patch: { timeoutSec: 300 },
-    why: 'GH Copilot CLI default bash timeout is 30s — surf-skill needs more.',
+    why: 'GH Copilot CLI default bash timeout is 30s — surf-search-skill needs more.',
   },
   claude: {
     // .claude/settings.local.json is gitignored by Anthropic convention.
@@ -129,7 +129,7 @@ export async function runProjectConfig(_pos, flags = {}, cwd = process.cwd()) {
 
 export function formatProjectConfigResult(result, { json = false } = {}) {
   if (json) return JSON.stringify(result, null, 2);
-  const lines = [`✓ surf-skill project-config in ${result.cwd}`];
+  const lines = [`✓ surf-search-skill project-config in ${result.cwd}`];
   for (const r of result.results) {
     lines.push(`  • ${r.harness}: wrote ${r.file}`);
     lines.push(`      ${r.why}`);

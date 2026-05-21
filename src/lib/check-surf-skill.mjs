@@ -1,6 +1,6 @@
-// Verify the companion `surf-skill` CLI is installed and reachable.
+// Verify the companion `surf-search-skill` CLI is installed and reachable.
 //
-// We shell out instead of importing — surf-skill is a sibling npm package
+// We shell out instead of importing — surf-search-skill is a sibling npm package
 // the user installs separately, and we want to detect "not installed" rather
 // than crash on an import error.
 
@@ -19,12 +19,12 @@ const pexec = promisify(exec);
  */
 export async function checkSurfSkill() {
   try {
-    const { stdout: vOut } = await pexec('surf-skill --version', { timeout: 10_000 });
+    const { stdout: vOut } = await pexec('surf-search-skill --version', { timeout: 10_000 });
     const version = vOut.trim().split('\n').pop();
 
     let keyCounts;
     try {
-      const { stdout: kOut } = await pexec('surf-skill keys list --json', { timeout: 10_000 });
+      const { stdout: kOut } = await pexec('surf-search-skill keys list --json', { timeout: 10_000 });
       const state = JSON.parse(kOut);
       keyCounts = {
         tavily:   Array.isArray(state?.tavily?.keys)   ? state.tavily.keys.length   : 0,
@@ -32,7 +32,7 @@ export async function checkSurfSkill() {
         brave:    Array.isArray(state?.brave?.keys)    ? state.brave.keys.length    : 0,
       };
     } catch {
-      // keys list --json may fail (older surf-skill); ignore.
+      // keys list --json may fail (older surf-search-skill); ignore.
     }
 
     return { installed: true, version, keyCounts };
@@ -40,7 +40,7 @@ export async function checkSurfSkill() {
     const msg = (e && e.message) || String(e);
     return {
       installed: false,
-      error: /not found|ENOENT/i.test(msg) ? 'surf-skill not in PATH' : msg,
+      error: /not found|ENOENT/i.test(msg) ? 'surf-search-skill not in PATH' : msg,
     };
   }
 }

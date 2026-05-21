@@ -151,7 +151,7 @@ export async function listPlans(opts = {}) {
 
 /**
  * Create a stub plan file (mostly empty, with placeholders). Used by
- * `surf-plan new "<task>"` so the user — or the agent — can fill it in.
+ * `surf-plan-skill new "<task>"` so the user — or the agent — can fill it in.
  *
  * @param {string} task
  * @param {object} [opts]

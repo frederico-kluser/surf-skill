@@ -102,7 +102,7 @@ Returns **HTTP 202** with `{ run_id, status: "queued" \| "running", is_active, p
 }
 ```
 
-Processor mapping used by `surf-skill research`:
+Processor mapping used by `surf-search-skill research`:
 
 | `--model` | Parallel processor |
 |---|---|
