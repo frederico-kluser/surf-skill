@@ -4,7 +4,7 @@ description: Generate a research-grounded execution plan for any coding task. AL
 license: MIT
 allowed-tools: bash, read, glob, grep, edit, write, AskUserQuestion
 metadata:
-  version: "4.0.0"
+  version: "4.0.1"
   requires: "node>=18; surf-search-skill in PATH (npm i -g surf-skill); plan dir at ~/.claude/plans/ (or ./plans/ if it exists in the project)"
 ---
 

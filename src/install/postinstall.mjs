@@ -59,7 +59,7 @@ async function main() {
   if (skel.created) process.stdout.write(`✓ created ${skel.created} (chmod 600)\n`);
 
   process.stdout.write('\n');
-  process.stdout.write('✓ surf-skill 4.0.0 installed globally — 2 skills + 3 bins:\n');
+  process.stdout.write('✓ surf-skill 4.0.1 installed globally — 2 skills + 3 bins:\n');
   process.stdout.write('    surf                interactive setup with live key validation\n');
   process.stdout.write('    surf-search-skill   multi-provider web search (Tavily + Parallel + Brave)\n');
   process.stdout.write('    surf-plan-skill     research-grounded execution planning\n');

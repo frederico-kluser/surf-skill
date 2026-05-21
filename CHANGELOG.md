@@ -1,5 +1,46 @@
 # Changelog
 
+## v4.0.1 — fix missing `surf-search-skill` bin after v4.0.0 rename
+
+### The bug
+
+`npm i -g surf-skill@4.0.0` installed the package but did **not** create
+the `surf-search-skill` command on PATH. Only `surf` and
+`surf-plan-skill` symlinks were created. Calling `surf-search-skill …`
+produced `command not found`, breaking the skill end-to-end.
+
+### Root cause
+
+The v4.0.0 rename moved `bin/surf-skill.mjs` → `bin/surf-search-skill.mjs`
+(file rename) but `package.json#bin` was missed — it still mapped
+`"surf-skill": "./bin/surf-skill.mjs"`, pointing at a file that no longer
+exists. npm silently skipped the broken bin entry instead of erroring,
+so no `surf-search-skill` symlink was ever created.
+
+### Fix
+
+- `package.json#bin`: `"surf-skill": "./bin/surf-skill.mjs"` →
+  `"surf-search-skill": "./bin/surf-search-skill.mjs"`.
+
+### Files changed
+
+- `package.json` (bin entry + version bump).
+- `bin/{surf,surf-search-skill,surf-plan-skill}.mjs` — `VERSION` →
+  `4.0.1`.
+- `src/install/postinstall.mjs` — banner string.
+- `SKILL.md`, `skills/surf-plan-skill/SKILL.md` — frontmatter
+  `version: "4.0.1"`.
+- `README.md` — Status badge and Repository layout heading.
+
+### Upgrading
+
+```bash
+npm i -g surf-skill@latest
+surf-search-skill --version   # 4.0.1
+```
+
+No other behavior changes — this is purely a packaging fix.
+
 ## v4.0.0 — rename `surf-skill` skill → `surf-search-skill` (consistent suffix), audit cleanup
 
 ### Why a major bump

@@ -4,7 +4,7 @@ description: Web search, content extraction, site crawl, URL mapping, and deep r
 license: MIT
 allowed-tools: bash
 metadata:
-  version: "4.0.0"
+  version: "4.0.1"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-search-skill + surf-plan-skill); keys via `surf` (interactive, with live validation) or `surf-search-skill setup`; per-project bash timeout via `surf-search-skill project-config`"
 ---
 

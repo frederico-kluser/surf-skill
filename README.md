@@ -39,7 +39,7 @@ architect / spec ──────────────────►│  (
 
 | | |
 |---|---|
-| **Status** | v4.0.0 (npm) |
+| **Status** | v4.0.1 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-search-skill` (search) + `surf-plan-skill` (planning) |
 | **Bins shipped** | `surf` (interactive setup + validation), `surf-search-skill`, `surf-plan-skill` |
@@ -437,11 +437,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v4.0.0)
+## Repository layout (v4.0.1)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 4.0.0, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 4.0.1, 3 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE
