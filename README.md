@@ -18,25 +18,53 @@
 
 ---
 
-**One command. Three providers. Zero MCP.** Install with `npm i -g surf-skill`.
-The agent calling this skill **never picks the provider** — `surf-skill` does.
+**Two skills. Three providers. One install.** `npm i -g surf-skill` now bundles
+both **`surf-skill`** (multi-provider web search) and **`surf-plan-skill`**
+(research-driven execution planning), plus a friendly `surf` setup wrapper with
+live key validation.
 
 ```
-search ─┐            ┌──▶ Tavily   (search, extract, crawl, map, research)
-extract ┤            │
-crawl ──┼──▶ surf ───┼──▶ Parallel (search, extract, research async)
-map  ───┤            │
-research┘            └──▶ Brave    (search only — own index)
+                  ┌──▶ Tavily   (search, extract, crawl, map, research)
+search   ─┐       │
+extract  ─┤       │
+crawl   ──┼──▶ surf-skill ──▶ Parallel (search, extract, research async)
+map     ──┤       │
+research ─┘       │
+                  └──▶ Brave    (search only — own index)
+
+plan / design ──▶ surf-plan-skill ──┐
+architect / spec ──────────────────►│  (calls surf-skill for web research)
+                                    └──▶ Markdown plan file with [^N] citations
 ```
 
 | | |
 |---|---|
-| **Status** | v2.1.0 (npm) |
+| **Status** | v3.0.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
+| **Skills shipped** | `surf-skill` (search) + `surf-plan-skill` (planning) |
+| **Bins shipped** | `surf` (interactive setup + validation), `surf-skill`, `surf-plan-skill` |
 | **Runtime** | Node ≥ 18. Zero npm deps. |
 | **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime by the CLI. |
 | **Supported agents** | Claude Code · GitHub Copilot CLI · Pi Coding Agent · OpenCode · Codex CLI |
 | **Spec** | [Anthropic Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) |
+
+## Quickstart (60 seconds)
+
+```bash
+npm i -g surf-skill          # installs BOTH skills + 3 bins (cross-OS)
+surf                         # interactive: add keys with LIVE validation
+                             #   ✓ valid (tavily, HTTP 200, 1.2s, 1 credit)
+                             #   ✗ invalid (auth, HTTP 401) — NOT saved
+
+# Use directly:
+surf-skill search "claude 4.7 release notes" --max 3
+surf-skill search "X" --provider brave --mode fast
+
+# Or ask an AI agent:
+> make a plan for adding rate limiting to my Express API
+# → surf-plan-skill kicks in: reads project, runs surf-skill searches,
+#   asks 3-5 researched questions, writes ~/.claude/plans/<slug>-<ts>.md
+```
 
 ---
 

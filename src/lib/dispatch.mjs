@@ -13,7 +13,7 @@ import { sleep } from './flags.mjs';
 import { progress } from './progress.mjs';
 
 const CACHEABLE = new Set(['search', 'extract', 'map']);
-const VERSION = '2.1.1';
+const VERSION = '3.0.0';
 
 // Detect the agent harness's bash timeout from env vars. The number is the
 // total time (ms) the harness will allow our process to live before SIGTERM.
