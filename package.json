@@ -1,15 +1,19 @@
 {
   "name": "surf-skill",
-  "version": "2.1.1",
-  "description": "Multi-provider web skill (Tavily + Parallel AI + Brave Search) for AI coding agents — CLI + Node library + Anthropic Agent Skill. Auto-fallback, multi-key rotation, --mode tiers, per-project timeout config.",
+  "version": "3.0.1",
+  "description": "Multi-skill bundle for AI coding agents: surf-skill (multi-provider web search via Tavily + Parallel + Brave) + surf-plan-skill (research-driven execution planning). Includes `surf` interactive setup with live key validation, automatic provider fallback, multi-key rotation, --mode tiers, per-project timeout config, and a Node library.",
   "type": "module",
   "main": "./src/index.mjs",
   "exports": {
     ".": "./src/index.mjs",
+    "./plan": "./src/plan/plan-file.mjs",
+    "./validators": "./src/validators/index.mjs",
     "./package.json": "./package.json"
   },
   "bin": {
-    "surf-skill": "./bin/surf-skill.mjs"
+    "surf": "./bin/surf.mjs",
+    "surf-skill": "./bin/surf-skill.mjs",
+    "surf-plan-skill": "./bin/surf-plan-skill.mjs"
   },
   "files": [
     "bin/",

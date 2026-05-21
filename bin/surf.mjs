@@ -21,7 +21,7 @@ import { loadState, saveStateAtomic, KEYS_FILE, PROVIDERS } from '../src/lib/sta
 import { validateKey, formatValidation } from '../src/validators/index.mjs';
 import { HARNESS_DIRS } from '../src/lib/harness-install.mjs';
 
-const VERSION = '3.0.0';
+const VERSION = '3.0.1';
 
 const HELP = `surf — multi-skill setup & validation
 

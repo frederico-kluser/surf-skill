@@ -1,5 +1,32 @@
 # Changelog
 
+## v3.0.1 — package.json fix for the v3.0.0 bundle
+
+v3.0.0 shipped to GitHub with a partial `package.json` edit: the new
+`surf` and `surf-plan-skill` `bin` entries were missing, the `version`
+field wasn't bumped (still `2.1.1`), and the description didn't mention
+the planning skill. The skill code itself was fine, but `npm i -g
+surf-skill@3.0.0` would only install the `surf-skill` binary, hiding the
+new `surf` wrapper and `surf-plan-skill` CLI. v3.0.1 corrects the
+manifest so the bundle actually exposes all 3 bins on install.
+
+What changed in v3.0.1 vs v3.0.0:
+
+- `package.json::version` 2.1.1 → 3.0.1
+- `package.json::bin` includes all 3: `surf`, `surf-skill`, `surf-plan-skill`
+- `package.json::description` updated to describe the bundle (2 skills)
+- `package.json::exports` adds `./plan` and `./validators` subpath exports
+- `SKILL.md::metadata.version` 2.1.1 → 3.0.1
+- All internal `VERSION` constants bumped to 3.0.1
+
+No code-behavior changes vs v3.0.0; release v3.0.0 is superseded.
+
+If you installed v3.0.0 by hand from GitHub: upgrade with
+`npm i -g surf-skill@latest` and `surf doctor` to confirm all 3 bins
+are present.
+
+---
+
 ## v3.0.0 — multi-skill bundle: surf-skill + surf-plan-skill + `surf` wrapper with live key validation
 
 ### What's new
