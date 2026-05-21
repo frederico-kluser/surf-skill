@@ -1,10 +1,25 @@
-# surf-skill
+<p align="center">
+  <img src="logo.png" alt="surf-skill logo" width="160" />
+</p>
 
-**One bash command. Two providers. Zero MCP.** A multi-provider web skill
-for AI coding agents that fronts **Tavily** and **Parallel AI** behind a
-single CLI (`surf-skill`). The agent calling this skill **never picks the
-provider** — `surf-skill` does, with automatic key rotation, provider
-fallback, and last-known-good persistence.
+<h1 align="center">surf-skill</h1>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/surf-skill"><img src="https://img.shields.io/npm/v/surf-skill?style=flat-square&color=black" alt="npm" /></a>
+  <a href="https://www.npmjs.com/package/surf-skill"><img src="https://img.shields.io/npm/dt/surf-skill?style=flat-square&color=black" alt="downloads" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/npm/l/surf-skill?style=flat-square&color=black" alt="MIT" /></a>
+  <img src="https://img.shields.io/node/v/surf-skill?style=flat-square&color=black" alt="node>=18" />
+</p>
+
+<p align="center">
+  Multi-provider web skill for AI coding agents.<br/>
+  Fronts <strong>Tavily</strong> and <strong>Parallel AI</strong> behind a single CLI + Node library, with automatic key rotation, provider fallback, and last-known-good persistence.
+</p>
+
+---
+
+**One command. Two providers. Zero MCP.** Install with `npm i -g surf-skill`. The agent
+calling this skill **never picks the provider** — `surf-skill` does.
 
 ```
 search ─┐
@@ -16,9 +31,10 @@ research┘
 
 | | |
 |---|---|
-| **Status** | v1.0.0 |
-| **Runtime** | Node ≥ 18, bash. Zero npm deps. |
-| **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime. |
+| **Status** | v2.0.0 (npm) |
+| **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
+| **Runtime** | Node ≥ 18. Zero npm deps. |
+| **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime by the CLI. |
 | **Supported agents** | Claude Code · GitHub Copilot CLI · Pi Coding Agent · OpenCode · Codex CLI |
 | **Spec** | [Anthropic Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills) |
 
