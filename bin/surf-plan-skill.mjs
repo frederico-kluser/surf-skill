@@ -9,7 +9,7 @@ import { listPlans, readPlan, newPlanStub } from '../src/plan/plan-file.mjs';
 import { slugify } from '../src/plan/slug.mjs';
 import { checkSurfSkill } from '../src/lib/check-surf-skill.mjs';
 
-const VERSION = '4.0.1';
+const VERSION = '4.1.0';
 
 const HELP = `surf-plan-skill — research-grounded execution planning skill
 
@@ -32,13 +32,18 @@ Plan dir resolution:
   4. ~/.claude/plans/ (default)
 
 How the workflow runs (your AI agent does this when you ask for a plan):
-  Phase 0  Preflight — verify surf-search-skill is installed
+  Phase 0  Resolve research layer — surf-search-skill CLI, or the
+           harness's WebSearch/WebFetch when Bash is blocked (plan mode)
   Phase 1  Project discovery — read CLAUDE.md, package.json, source tree
-  Phase 2  Baseline web research — surf-search-skill search (batched, 3 queries)
+  Phase 2  Baseline web research — batched, 3 queries (REQUIRED)
   Phase 3  Open the conversation — what we read + what the web says
   Phase 4  Clarifying questions — MAX 5, each preceded by a search
   Phase 5  Synthesis research — verify choices against latest sources
-  Phase 6  Write the plan file — Markdown with [^N] footnote citations
+  Phase 6  Deliver — plan file (or plan-mode approval first), with a
+           Research Ledger + [^N] footnote citations
+
+THE GATE: the agent may not present any plan — including for plan-mode
+approval — before Phases 2 and 5 are in the Research Ledger.
 
 Tell your agent: "make a plan for X"
 Examples (your agent does the work):

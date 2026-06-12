@@ -15,7 +15,7 @@ import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '4.0.1';
+const VERSION = '4.1.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already

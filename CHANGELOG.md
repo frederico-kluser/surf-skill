@@ -1,5 +1,98 @@
 # Changelog
 
+## v4.1.0 — surf-plan-skill: enforce research before ANY plan (plan-mode fix)
+
+### The bug
+
+`surf-plan-skill` delivered plans **without running any web research**,
+especially when the plan was presented for user approval (Claude Code
+plan mode / `ExitPlanMode`). The skill's whole value — research-grounded
+plans — silently didn't happen.
+
+### Root causes (three, stacking)
+
+1. **Plan mode blocks Bash.** The skill's only research mechanism was
+   the `surf-search-skill` CLI via the Bash tool. Harness plan modes —
+   the exact modes that present a plan for approval — block Bash (and
+   Write) entirely, allowing only read-only tools (Read, Glob, Grep,
+   WebSearch, WebFetch, AskUserQuestion). The agent triggered the
+   skill, found Bash blocked, skipped research, and presented an
+   unresearched plan for approval. The SKILL.md said nothing about
+   approval modes or fallbacks, and its Phase 0 "halt if the CLI is
+   unreachable" rule turned every Bash restriction into a dead end.
+2. **Invalid `allowed-tools` frontmatter.** Both skills listed
+   lowercase tool names (`bash, read, glob, grep, edit, write`). Claude
+   Code tool names are PascalCase (`Bash`, `Read`, …) and matching is
+   case-sensitive, so nothing was actually pre-approved — every
+   research call hit a permission prompt, adding friction that nudged
+   agents toward skipping searches.
+3. **No verifiable gate.** The 6-phase workflow was descriptive prose;
+   nothing forced the agent to produce evidence that research happened
+   before the plan went out. Anthropic's skill-authoring guidance:
+   models skip steps unless you add checklists + verifiable
+   intermediate outputs.
+
+### Fix
+
+`skills/surf-plan-skill/SKILL.md` rewritten (v4.1.0):
+
+- **THE GATE**: the agent may not present, write, file, or submit a
+  plan — through any channel, including `ExitPlanMode`/plan-approval
+  tools — until the Research Ledger shows the Phase 2 baseline batch
+  (≥3 queries) and the Phase 5 synthesis batch (≥2 queries), plus one
+  search per clarifying question. The only bypass is the user
+  explicitly accepting a plan labeled "NOT WEB-RESEARCHED".
+- **Layered research (A→B→C)**: Layer A = `surf-search-skill` via Bash
+  (preferred); Layer B = harness-native WebSearch/WebFetch (Bash
+  blocked/denied/missing — e.g. plan mode); Layer C = nothing available
+  → halt and let the user decide. **A blocked layer means fall back,
+  never skip.** Mid-flow Layer A failures downgrade to B.
+- **Plan-approval mode integration**: Phases 0–5 run BEFORE the
+  approval tool is called; the submitted plan embeds Decisions-with-
+  citations + Research Ledger; the plan file is written immediately
+  after approval (Write is blocked before).
+- **Progress checklist** the agent copies into its response and updates
+  (skipped phases become visible), per Anthropic best practices.
+- **Research Ledger** — new required plan section: one row per query
+  (phase, layer, query, footnotes used). Every Decision footnote must
+  trace to a ledger row; fabricated ledgers are called out as the worst
+  anti-pattern.
+- **Frontmatter**: `allowed-tools` fixed to valid PascalCase scoped
+  rules (`Bash(surf-search-skill:*), Bash(surf-plan-skill:*), Read,
+  Glob, Grep, Write, Edit, WebSearch, WebFetch, AskUserQuestion`);
+  description rewritten to be directive ("MUST BE USED … BEFORE any
+  plan is presented for approval"), mention plan mode, and include
+  Portuguese trigger phrases ("faça um plano", "planeje isso", …);
+  added `argument-hint`.
+- Phase 0 no longer hard-halts when the CLI is missing — it resolves
+  the best available layer; only Layer C halts (user's call).
+
+Root `SKILL.md` (search skill): `allowed-tools: bash` →
+`Bash(surf-search-skill:*), Bash(surf:*)` (same casing bug, scoped).
+
+### Files changed
+
+- `skills/surf-plan-skill/SKILL.md` — rewritten (gate, layers,
+  plan-mode integration, checklist, ledger, frontmatter).
+- `SKILL.md` — `allowed-tools` casing/scoping fix + version.
+- `references/plan-workflow.md` — documents the gate, layers, and
+  plan-approval-mode behavior; updated phases and anti-patterns.
+- `bin/surf-plan-skill.mjs` — help text reflects the new Phase 0/6 and
+  THE GATE; `VERSION` → `4.1.0`.
+- `bin/{surf,surf-search-skill}.mjs`, `src/install/postinstall.mjs`,
+  `package.json`, `README.md` — version bump + gate note in README.
+
+### Upgrading
+
+```bash
+npm i -g surf-skill@latest
+surf-plan-skill --version    # 4.1.0
+```
+
+Then ask your agent for a plan (plan mode included) — it must show the
+progress checklist, run the searches (or visibly fall back to
+WebSearch), and the delivered plan must contain a Research Ledger.
+
 ## v4.0.1 — fix missing `surf-search-skill` bin after v4.0.0 rename
 
 ### The bug

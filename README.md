@@ -39,7 +39,7 @@ architect / spec ──────────────────►│  (
 
 | | |
 |---|---|
-| **Status** | v4.0.1 (npm) |
+| **Status** | v4.1.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-search-skill` (search) + `surf-plan-skill` (planning) |
 | **Bins shipped** | `surf` (interactive setup + validation), `surf-search-skill`, `surf-plan-skill` |
@@ -64,6 +64,11 @@ surf-search-skill search "X" --provider brave --mode fast
 > make a plan for adding rate limiting to my Express API
 # → surf-plan-skill kicks in: reads project, runs surf-search-skill searches,
 #   asks 3-5 researched questions, writes ~/.claude/plans/<slug>-<ts>.md
+#
+# Research is gated, not optional: the agent may not present a plan —
+# including for plan-mode approval — before the searches are done. When
+# the harness blocks Bash (e.g. Claude Code plan mode), the skill falls
+# back to the harness's native WebSearch/WebFetch instead of skipping.
 ```
 
 ---
@@ -437,11 +442,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v4.0.1)
+## Repository layout (v4.1.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 4.0.1, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 4.1.0, 3 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE

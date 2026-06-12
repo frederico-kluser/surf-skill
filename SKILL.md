@@ -2,9 +2,9 @@
 name: surf-search-skill
 description: Web search, content extraction, site crawl, URL mapping, and deep research via Tavily and Parallel AI, with automatic provider fallback and multi-key rotation. The agent does NOT pick a provider — `surf-search-skill` does it. Use whenever the user wants to search the web, find articles, look something up online, fetch a page, extract content from URLs, crawl a documentation site, discover URLs on a domain, or run multi-source research with citations. Triggers on phrases like "search the web", "find articles about", "fetch this page", "extract from URL", "crawl the docs", "research X", "investigate", "compare X vs Y". Do NOT use for local files, git, or code editing.
 license: MIT
-allowed-tools: bash
+allowed-tools: Bash(surf-search-skill:*), Bash(surf:*)
 metadata:
-  version: "4.0.1"
+  version: "4.1.0"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-search-skill + surf-plan-skill); keys via `surf` (interactive, with live validation) or `surf-search-skill setup`; per-project bash timeout via `surf-search-skill project-config`"
 ---
 
