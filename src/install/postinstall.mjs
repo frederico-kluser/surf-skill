@@ -68,10 +68,11 @@ async function main() {
   if (skel.created) process.stdout.write(`✓ created ${skel.created} (chmod 600)\n`);
 
   process.stdout.write('\n');
-  process.stdout.write('✓ surf-skill 4.1.0 installed globally — 2 skills + 3 bins:\n');
+  process.stdout.write('✓ surf-skill 4.2.0 installed globally — 4 skills + 3 bins:\n');
   process.stdout.write('    surf                interactive setup with live key validation\n');
   process.stdout.write('    surf-search-skill   multi-provider web search (Tavily + Parallel + Brave)\n');
   process.stdout.write('    surf-plan-skill     research-grounded execution planning\n');
+  process.stdout.write('  + 2 agent-only skills (no bin): surf-parallel-skill, surf-deep-plan-skill\n');
   process.stdout.write('\n');
   process.stdout.write('  → Next: run `surf` to add keys (each one is live-validated)\n');
   process.stdout.write('  → Then ask your AI agent: "make a plan for X" (planning skill kicks in)\n');

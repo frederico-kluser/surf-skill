@@ -11,7 +11,7 @@
 // Keys are auto-discovered (opts > process.env > .env > ~/.config/surf/keys.json).
 // Pass `tavilyKeys: [...]` / `parallelKeys: [...]` / `braveKeys: [...]` to override.
 
-export { search } from './lib/api/search.mjs';
+export { search, searchParallel } from './lib/api/search.mjs';
 export { extract } from './lib/api/extract.mjs';
 export { crawl } from './lib/api/crawl.mjs';
 export { map } from './lib/api/map.mjs';

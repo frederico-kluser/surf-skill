@@ -1,5 +1,69 @@
 # Changelog
 
+## v4.2.0 — parallel fan-out, two new skills, and the Pi no-limit stance
+
+Adds a real **parallel search** path and two skills tuned for it, and corrects
+the project's stance on **Pi Coding Agent timeouts**.
+
+### Added
+
+- **`surf-search-skill search-parallel`** — fan out MANY searches concurrently
+  through a zero-dep, bounded-concurrency worker pool (`src/lib/pool.mjs`:
+  N workers drain a shared cursor; each task is try/caught so one failure never
+  kills a worker — the p-limit + `Promise.allSettled` pattern). Flags:
+  `--concurrency <n>` (default 6, cap 16), `--queries-file <F.json>` (JSON array
+  of strings or `{q,id,sub}` objects, or a newline list). Output groups by
+  sub-question. Partial-failure tolerant: a 429 rotates keys/backs off inside
+  the call; the command exits non-zero only when EVERY query failed. State is
+  loaded once and shared across workers (per-call persistence suppressed, then
+  persisted once) so burned keys are visible immediately and there is no
+  lockfile thrash.
+- **`extract --urls-file <F.json>`** — read URLs from a JSON array
+  (`["u", {"url":"u"}]`) or newline list, in addition to positional URLs.
+- **`searchParallel(queries, opts)`** library export (`opts.concurrency`,
+  `opts.noBudget` default true for library callers).
+- **`--no-budget` flag / `SURF_NO_TIMEOUT=1` / `SURF_AGENT_BUDGET_MS=0`** —
+  disables the self-budget abort and lets each request use the provider's own
+  per-request ceiling (`SURF_TIMEOUT_MS` || 45 s) instead of the detected
+  harness bash timeout. For no-limit harnesses only (e.g. Pi core).
+- **`surf-parallel-skill`** (new skill) — maximum-information parallel research:
+  decompose → diverse queries per sub-question → `search-parallel` fan-out →
+  extract top hits → dedupe → cited synthesis, behind a **fan-out gate** (no
+  sub-question silently dropped). Triggers narrowed to broad/deep intent so it
+  does not collide with `surf-search-skill` on simple lookups.
+- **`surf-deep-plan-skill`** (new skill) — ambiguity-exhaustive, research-grounded
+  planning: a mandatory **ambiguity sweep** (taxonomy + EARS gap test +
+  two-implementations divergence test) and a **two-lock gate** (ambiguity lock +
+  research lock) on top of the existing plan workflow. Triggers narrowed to
+  "raise all doubts first" / "levante todas as dúvidas" so it does not collide
+  with `surf-plan-skill`, which it cross-references for routine plans.
+
+### Changed
+
+- **Pi no-limit stance (reconciled across README, root `SKILL.md`,
+  `project-config`).** Pi *core* applies **no** bash timeout; the previous docs
+  treated it as 120 s/600 s. The `PI_BASH_*` env vars only bind the optional
+  `pi-bash-timeout` extension (where `project-config` raises its cap to
+  300 s/600 s). surf can't detect Pi from the environment, so it still
+  self-guesses 30 s worst-case and self-aborts — hence `--no-budget` for known-
+  long calls on Pi. `dispatch.detectHarnessBudgetMs()`/`detectHarnessName()` now
+  take `flags` and return `Infinity`/`'no-limit …'` when opted out; the worst-
+  case 30 s default for *unknown* harnesses is unchanged (Copilot safety).
+- `dispatch` never passes `Infinity` as an HTTP timeout (Node clamps it to ~1 ms
+  and would abort immediately); unlimited → `undefined` → provider default.
+- Skills registered in `harness-install.mjs` (now 4 skills symlinked per
+  harness); version bumped to 4.2.0 across bins, `package.json`, postinstall,
+  and all `SKILL.md` metadata.
+
+### Why
+
+`search "a" "b" "c"` runs **sequentially** by design (rate-limit safety). Broad
+research and ambiguity-first planning want genuine concurrency; `search-parallel`
+provides it without sacrificing key rotation, fallback, or partial-failure
+tolerance. And on a harness with no bash timeout (Pi core), the self-budget
+abort was the only thing capping long fan-outs — `--no-budget` removes it
+deliberately, only where the user knows it is safe.
+
 ## v4.1.0 — surf-plan-skill: enforce research before ANY plan (plan-mode fix)
 
 ### The bug

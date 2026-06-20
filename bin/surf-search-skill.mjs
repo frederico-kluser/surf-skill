@@ -3,19 +3,20 @@
 // across Tavily and Parallel AI with automatic key + provider fallback.
 
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
-import { parseFlags, sleep } from '../src/lib/flags.mjs';
+import { parseFlags, sleep, clamp } from '../src/lib/flags.mjs';
 import { dispatch, DispatchError } from '../src/lib/dispatch.mjs';
+import { mapPool } from '../src/lib/pool.mjs';
 import { formatFor } from '../src/lib/format.mjs';
 import { runKeysSubcommand } from '../src/lib/keys-cmd.mjs';
 import { cacheClear } from '../src/lib/cache.mjs';
 import { readUsage, USAGE_LOG } from '../src/lib/audit.mjs';
-import { migrateLegacy } from '../src/lib/state.mjs';
+import { migrateLegacy, loadState, saveStateAtomic } from '../src/lib/state.mjs';
 import { runSetup } from '../src/lib/setup.mjs';
 import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-config.mjs';
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '4.1.0';
+const VERSION = '4.2.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -42,7 +43,13 @@ Commands:
                               REQUIRED for GH Copilot CLI projects.
   search <q> [<q2> ...]       Web search. Multiple positional args = batch
                               (sequential, partial failures reported inline).
+  search-parallel <q> [q2...] Fan out MANY searches concurrently (bounded
+                              [--queries-file F.json] [--concurrency 6]
+                              worker pool, partial-failure tolerant). Accepts
+                              positional queries and/or a JSON queries file
+                              ([ "q", {"q":"...","id":"...","sub":"..."} ]).
   extract <url> [url ...]     Fetch & extract content from URLs
+                              [--urls-file F.json] (JSON array / newline list)
   crawl <url>                 Crawl a site (Tavily only)
   map <url>                   Discover URLs on a site (Tavily only)
   research <topic>            Sync deep research (~50s budget)
@@ -65,6 +72,11 @@ Global flags:
   --json                         Print normalized envelope as JSON
   --raw-json                     Print raw provider response (bypasses cache)
   --confirm-expensive            Allow operations estimated > 10 credits
+  --no-budget                    Disable the self-budget abort: let calls run
+                                   to the provider's per-request ceiling instead
+                                   of the detected harness bash timeout. Use ONLY
+                                   on harnesses with NO bash timeout (e.g. Pi
+                                   core). Same as SURF_NO_TIMEOUT=1.
   --quiet                        Silence progress logs (stderr)
   --help, -h                     Show this help
   --version, -v                  Show version
@@ -79,6 +91,8 @@ Examples:
   surf-search-skill setup
   surf-search-skill search "claude 4.7 release notes" --max 3
   surf-search-skill search "topic A" "topic B" "topic C"      # batch (3 queries)
+  surf-search-skill search-parallel "topic A" "topic B" "topic C" --concurrency 6
+  surf-search-skill search-parallel --queries-file q.json --concurrency 8 --no-budget --json
   surf-search-skill extract https://docs.anthropic.com/...
   surf-search-skill research-start "compare X and Y" --model pro --confirm-expensive
   surf-search-skill keys add --provider tavily tvly-...
@@ -254,11 +268,191 @@ function emitBatchResult(payload, flags) {
   out(md);
 }
 
+// --- Parallel search (fan-out) ---
+
+// Read a JSON array (preferred) or newline-delimited list from a file.
+// Returns the parsed array; throws via die() on read/parse problems.
+async function readListFile(file, label) {
+  let txt;
+  try { txt = await readFile(file, 'utf8'); }
+  catch (e) { die(`${label}: cannot read ${file}: ${e.message}`); }
+  try {
+    const parsed = JSON.parse(txt);
+    if (!Array.isArray(parsed)) die(`${label}: ${file} must contain a JSON array.`);
+    return parsed;
+  } catch (e) {
+    if (e && e.message && /must contain a JSON array/.test(e.message)) throw e;
+    // Not JSON — treat as newline-delimited.
+    return txt.split('\n').map(s => s.trim()).filter(Boolean);
+  }
+}
+
+async function readUrlsFile(file) {
+  const parsed = await readListFile(file, '--urls-file');
+  const urls = [];
+  for (const el of parsed) {
+    if (typeof el === 'string') urls.push(el.trim());
+    else if (el && typeof el === 'object' && (el.url || el.href)) urls.push(String(el.url || el.href));
+  }
+  return urls.filter(Boolean);
+}
+
+// Build the query work-list from positional args + an optional --queries-file.
+// Each item is { id, q, sub } so output can be grouped by sub-question.
+async function collectParallelQueries(pos, flags) {
+  const items = pos.map((q, i) => ({ id: `q${i + 1}`, q, sub: null }));
+  if (flags['queries-file']) {
+    const parsed = await readListFile(flags['queries-file'], '--queries-file');
+    parsed.forEach((el, i) => {
+      if (typeof el === 'string') {
+        items.push({ id: `f${i + 1}`, q: el, sub: null });
+      } else if (el && typeof el === 'object' && (el.q || el.query)) {
+        items.push({
+          id: el.id || `f${i + 1}`,
+          q: el.q || el.query,
+          sub: el.sub || el.subQuestion || el.sub_question || null,
+        });
+      }
+    });
+  }
+  return items.filter(it => typeof it.q === 'string' && it.q.trim());
+}
+
+function resolveConcurrency(v) {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 1) return 6; // default
+  return clamp(Math.floor(n), 1, 16);
+}
+
+async function cmdSearchParallel(pos, flags) {
+  const items = await collectParallelQueries(pos, flags);
+  if (!items.length) {
+    die('Usage: surf-search-skill search-parallel "q1" "q2" ... [--queries-file F.json] [--concurrency 6] [--no-budget]');
+  }
+  const concurrency = resolveConcurrency(flags.concurrency);
+
+  // Load shared state ONCE and suppress per-call persistence: concurrent
+  // dispatches mutate this one object (single-threaded JS → no torn writes),
+  // burned keys become visible to in-flight workers immediately, and we avoid
+  // lockfile thrash. State is persisted once after the pool drains.
+  const state = await loadState();
+  state._inMemory = true;
+
+  progress.start(
+    `parallel: ${items.length} queries · concurrency ${concurrency}` +
+    (flags['no-budget'] ? ' · no-budget' : '')
+  );
+  const t0 = Date.now();
+
+  const settled = await mapPool(items, concurrency, (item) =>
+    dispatch('search', buildSearchArgs(item.q, flags), flags, { state })
+  );
+
+  // Persist accumulated burned/last_ok once (best-effort; normalize drops _inMemory).
+  try { delete state._inMemory; await saveStateAtomic(state); } catch {}
+
+  let okCount = 0;
+  let failCount = 0;
+  let totalCredits = 0;
+  const results = items.map((item, i) => {
+    const r = settled[i];
+    if (r && r.ok) {
+      okCount++;
+      const env = r.value;
+      const credits = env.usage && env.usage.credits;
+      if (credits != null) totalCredits += credits;
+      return {
+        index: i, id: item.id, sub: item.sub, query: item.q, ok: true,
+        provider: env.provider, latency_ms: env.latency_ms, usage: env.usage,
+        data: env.data, raw: env.raw,
+      };
+    }
+    failCount++;
+    const e = (r && r.error) || new Error('unknown error');
+    const code = e.code || e.name || 'Error';
+    progress.fail(`[${item.id}] "${item.q}" failed: [${code}] ${e.message || e}`);
+    return {
+      index: i, id: item.id, sub: item.sub, query: item.q, ok: false,
+      error: { code, message: e.message || String(e), details: e.details },
+    };
+  });
+
+  const elapsed = Date.now() - t0;
+  progress.done(`parallel done: ${okCount}/${items.length} ok, ${failCount} failed (${elapsed}ms, ${totalCredits} credits)`);
+
+  emitParallelResult({
+    operation: 'search-parallel',
+    summary: { total: items.length, succeeded: okCount, failed: failCount, total_credits: totalCredits, latency_ms: elapsed, concurrency },
+    results,
+  }, flags);
+
+  // Exit non-zero only when EVERY query failed.
+  if (okCount === 0 && failCount > 0) process.exitCode = 1;
+}
+
+function groupBy(arr, keyFn) {
+  const m = new Map();
+  for (const x of arr) {
+    const k = keyFn(x);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k).push(x);
+  }
+  return m;
+}
+
+function emitParallelResult(payload, flags) {
+  if (flags['raw-json']) {
+    out(JSON.stringify(payload.results.map(r => r.raw ?? r.error), null, 2));
+    return;
+  }
+  if (flags.json) {
+    out(JSON.stringify({
+      operation: payload.operation,
+      summary: payload.summary,
+      data: { results: payload.results.map(({ raw, ...rest }) => rest) },
+    }, null, 2));
+    return;
+  }
+  // Markdown — group by sub-question when any item carries one.
+  const { summary, results } = payload;
+  let md = `# Parallel search (${summary.total} queries · ${summary.succeeded} ok · ${summary.failed} failed · c=${summary.concurrency})\n\n`;
+  md += `_total: ${summary.total_credits} credits · ${summary.latency_ms}ms_\n\n`;
+  const hasSubs = results.some(r => r.sub);
+  const groups = hasSubs ? groupBy(results, r => r.sub || '(ungrouped)') : new Map([['', results]]);
+  for (const [sub, rows] of groups) {
+    if (sub) md += `## Sub-question: ${sub}\n\n`;
+    for (const b of rows) {
+      md += `---\n\n### [${b.id}] ${b.query}\n\n`;
+      if (!b.ok) {
+        md += `**❌ Failed:** \`[${b.error.code}]\` ${b.error.message}\n\n`;
+        continue;
+      }
+      md += `_provider: ${b.provider} · ${b.latency_ms}ms`;
+      if (b.usage && b.usage.credits != null) md += ` · ${b.usage.credits} credits`;
+      md += `_\n\n`;
+      const r = b.data || {};
+      if (r.answer) md += `**Answer:** ${r.answer}\n\n`;
+      (r.results || []).forEach((it, i) => {
+        md += `#### [${i + 1}] ${it.title || it.url}\n${it.url}\n`;
+        if (it.score != null) md += `*score: ${typeof it.score === 'number' ? it.score.toFixed(2) : it.score}*\n`;
+        if (it.published_date) md += `*published: ${it.published_date}*\n`;
+        const content = it.content || '';
+        md += `\n${content.length > 1200 ? content.slice(0, 1200) + '…' : content}\n\n`;
+      });
+    }
+  }
+  out(md);
+}
+
 async function cmdExtract(pos, flags) {
-  if (!pos.length) die('Usage: surf-search-skill extract <url1> [url2 ...]');
-  if (pos.length > 20) die('extract supports at most 20 URLs per call.');
+  const urls = [...pos];
+  if (flags['urls-file']) {
+    urls.push(...await readUrlsFile(flags['urls-file']));
+  }
+  if (!urls.length) die('Usage: surf-search-skill extract <url1> [url2 ...] | --urls-file F.json');
+  if (urls.length > 20) die(`extract supports at most 20 URLs per call (got ${urls.length}). Split into batches.`);
   const args = {
-    urls: pos,
+    urls,
     depth: flags.depth || 'basic',
     format: flags.format || 'markdown',
     images: flags.images,
@@ -519,6 +713,7 @@ if (!NO_KEYS_NEEDED.has(cmd) && process.stdin.isTTY) {
 try {
   switch (cmd) {
     case 'search': await cmdSearch(pos, flags); break;
+    case 'search-parallel': await cmdSearchParallel(pos, flags); break;
     case 'extract': await cmdExtract(pos, flags); break;
     case 'crawl': await cmdCrawl(pos, flags); break;
     case 'map': await cmdMap(pos, flags); break;

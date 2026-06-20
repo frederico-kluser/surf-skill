@@ -84,15 +84,20 @@ export async function unlinkIfOurs(link, expectedTarget) {
   }
 }
 
-// Install BOTH skills shipped by this package:
-//   - surf-skill       → pkgRoot           (root SKILL.md, search engine)
-//   - surf-plan-skill  → pkgRoot/skills/surf-plan-skill/  (planning workflow)
+// Install ALL skills shipped by this package:
+//   - surf-search-skill    → pkgRoot                              (root SKILL.md, search engine)
+//   - surf-plan-skill      → pkgRoot/skills/surf-plan-skill/      (planning workflow)
+//   - surf-parallel-skill  → pkgRoot/skills/surf-parallel-skill/  (parallel fan-out research)
+//   - surf-deep-plan-skill → pkgRoot/skills/surf-deep-plan-skill/ (ambiguity-exhaustive planning)
 //
-// Each harness gets 2 symlinks: ~/.claude/skills/surf-search-skill and
-// ~/.claude/skills/surf-plan-skill (and same for .agents/.codex/.pi).
+// Each harness gets one symlink per skill (e.g. ~/.claude/skills/surf-search-skill,
+// …/surf-plan-skill, …/surf-parallel-skill, …/surf-deep-plan-skill; same for
+// .agents/.codex/.pi).
 const SKILLS = [
-  { name: 'surf-search-skill', subdir: null },                      // root of package
-  { name: 'surf-plan-skill',   subdir: 'skills/surf-plan-skill' },  // sub-dir of package
+  { name: 'surf-search-skill',    subdir: null },                           // root of package
+  { name: 'surf-plan-skill',      subdir: 'skills/surf-plan-skill' },
+  { name: 'surf-parallel-skill',  subdir: 'skills/surf-parallel-skill' },
+  { name: 'surf-deep-plan-skill', subdir: 'skills/surf-deep-plan-skill' },
 ];
 
 export async function installSkill(pkgRoot) {

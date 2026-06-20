@@ -36,7 +36,10 @@ const PATCHES = {
         PI_BASH_MAX_TIMEOUT_SECONDS: '600',
       },
     },
-    why: 'Pi Coding Agent default bash timeout is 120s; raising to 300s.',
+    why: 'Pi core applies NO bash timeout — long surf calls run unbounded by ' +
+      'default. These vars only bind the optional `pi-bash-timeout` extension, ' +
+      'raising its cap to 300s/600s if installed. For calls you KNOW are long, ' +
+      'pass --no-budget (or set SURF_NO_TIMEOUT=1).',
   },
 };
 
@@ -140,6 +143,9 @@ export function formatProjectConfigResult(result, { json = false } = {}) {
   }
   if (result.targets.includes('claude')) {
     lines.push('ℹ .claude/settings.local.json is .gitignored by convention (per-user).');
+  }
+  if (result.targets.includes('pi')) {
+    lines.push('ℹ Pi core has no bash timeout; .pi/settings.json only matters with the `pi-bash-timeout` extension. For long calls, run `surf-search-skill ... --no-budget`.');
   }
   return lines.join('\n');
 }

@@ -18,10 +18,12 @@
 
 ---
 
-**Two skills. Three providers. One install.** `npm i -g surf-skill` now bundles
-both **`surf-search-skill`** (multi-provider web search) and **`surf-plan-skill`**
-(research-driven execution planning), plus a friendly `surf` setup wrapper with
-live key validation.
+**Four skills. Three providers. One install.** `npm i -g surf-skill` bundles
+**`surf-search-skill`** (multi-provider web search, with parallel fan-out),
+**`surf-plan-skill`** (research-driven execution planning),
+**`surf-parallel-skill`** (maximum-information parallel research), and
+**`surf-deep-plan-skill`** (ambiguity-exhaustive planning), plus a friendly
+`surf` setup wrapper with live key validation.
 
 ```
                   ┌──▶ Tavily   (search, extract, crawl, map, research)
@@ -32,17 +34,18 @@ map     ──┤       │
 research ─┘       │
                   └──▶ Brave    (search only — own index)
 
-plan / design ──▶ surf-plan-skill ──┐
-architect / spec ──────────────────►│  (calls surf-search-skill for web research)
-                                    └──▶ Markdown plan file with [^N] citations
+plan / design ──────▶ surf-plan-skill ──────┐  standard research-grounded plan
+"raise all doubts" ─▶ surf-deep-plan-skill ─┤  + exhaustive ambiguity sweep
+"deep dive" ────────▶ surf-parallel-skill ──┤  parallel fan-out + synthesis
+                                            └▶ all call surf-search-skill (cited)
 ```
 
 | | |
 |---|---|
-| **Status** | v4.1.0 (npm) |
+| **Status** | v4.2.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
-| **Skills shipped** | `surf-search-skill` (search) + `surf-plan-skill` (planning) |
-| **Bins shipped** | `surf` (interactive setup + validation), `surf-search-skill`, `surf-plan-skill` |
+| **Skills shipped** | `surf-search-skill` · `surf-plan-skill` · `surf-parallel-skill` · `surf-deep-plan-skill` |
+| **Bins shipped** | `surf` (interactive setup + validation), `surf-search-skill`, `surf-plan-skill` (the 2 new skills are agent-only, no bin) |
 | **Runtime** | Node ≥ 18. Zero npm deps. |
 | **Storage** | `~/.config/surf/keys.json` (chmod 600). Never read from env at runtime by the CLI. |
 | **Supported agents** | Claude Code · GitHub Copilot CLI · Pi Coding Agent · OpenCode · Codex CLI |
@@ -114,8 +117,12 @@ const r2 = await search('x', {
   depth: 'advanced',
 });
 
-// Batch search (single call, N queries, partial-failure tolerant)
+// Batch search (single call, N queries, partial-failure tolerant, sequential)
 const batch = await search(['topic A', 'topic B', 'topic C'], { max: 2 });
+
+// Parallel search (concurrent fan-out, bounded worker pool)
+import { searchParallel } from 'surf-skill';
+const par = await searchParallel(['angle A', 'angle B', 'angle C'], { concurrency: 6, max: 3 });
 
 // Deep research
 const job = await research('compare X vs Y', { model: 'mini' });
@@ -207,14 +214,21 @@ silently to SIGTERM.
 
 ```bash
 npm i -g surf-skill
-# Installer writes ~/.pi/agent/settings.json:
-#   { "env": { "PI_BASH_DEFAULT_TIMEOUT_SECONDS": "300",
-#              "PI_BASH_MAX_TIMEOUT_SECONDS": "600" } }
+# Symlinks the skills into ~/.pi/agent/skills/.
 ```
 
-The skill becomes available at `~/.pi/agent/skills/surf-search-skill/`. Pi reads
-the timeout from env, so the settings.json above is enough. For
-long-running work, Pi supports subagents with `--bg` and the `await` tool.
+**Pi core applies NO bash timeout** — long `surf-search-skill` calls (parallel
+fan-out, crawls, research) run unbounded by default. surf can't detect Pi from
+the environment, so it falls back to a 30 s worst-case guess and self-aborts;
+for calls you know are long, pass **`--no-budget`** (or `SURF_NO_TIMEOUT=1`):
+
+```bash
+surf-search-skill search-parallel --queries-file q.json --concurrency 8 --no-budget
+```
+
+If you run the optional **`pi-bash-timeout`** extension it re-imposes a 120 s
+cap; `surf-search-skill project-config` raises that to 300 s (writes
+`.pi/settings.json`). For long-running work, Pi also supports subagents.
 
 ### OpenCode & Codex CLI
 
@@ -229,12 +243,14 @@ set to 600 000 ms in `~/.config/opencode/opencode.json`.
 | Agent | Default bash | Max | After install | Most likely to time out? |
 |---|---|---|---|---|
 | **Claude Code** | 120 s | 600 s (hard) | 300 s default | Long crawls > 5 min |
-| **GitHub Copilot CLI** | **30 s** | NÃO DOCUMENTADO | unchanged (no global config) | **YES — most commands** |
-| **Pi Coding Agent** | 120 s | 600 s | 300 s default | Long crawls > 5 min |
+| **GitHub Copilot CLI** | **30 s** | not documented | unchanged (no global config) | **YES — most commands** |
+| **Pi Coding Agent** | **none (core)** | unbounded | use `--no-budget` for long calls | No (core); 120 s only with `pi-bash-timeout` ext |
 | **OpenCode** | varies | 600 s | 600 s default | Rarely |
 
 If you see timeouts, the order of fixes:
 
+0. On a **no-limit harness (Pi core)**, pass `--no-budget` (or
+   `SURF_NO_TIMEOUT=1`) so surf doesn't self-abort at its 30 s worst-case guess.
 1. Use `surf-search-skill research-start` + `research-poll` instead of sync
    `research`.
 2. Reduce `--limit` / `--max` / `--max-depth`.
@@ -249,8 +265,9 @@ If you see timeouts, the order of fixes:
 |---|---|---|
 | `setup` | Interactive wizard to add keys (TTY) | n/a |
 | `project-config` | Write per-project bash-timeout config | n/a |
-| `search <q> [q2 ...]` | Web search; multiple positional args = **batch** | tavily, parallel, **brave** |
-| `extract <url> ...` | Pull markdown from URLs | tavily, parallel |
+| `search <q> [q2 ...]` | Web search; multiple positional args = **batch** (sequential) | tavily, parallel, **brave** |
+| `search-parallel <q…>` | **Parallel** fan-out (bounded pool); `--queries-file`, `--concurrency` | tavily, parallel, brave |
+| `extract <url> ...` | Pull markdown from URLs (`--urls-file` accepted) | tavily, parallel |
 | `crawl <url>` | Recursive site crawl | tavily |
 | `map <url>` | Sitemap discovery | tavily |
 | `research <topic>` | Sync deep research (50 s budget) | parallel, tavily |
@@ -274,6 +291,9 @@ Global flags every command accepts:
                                       (Parallel ignores — single mode.)
 --no-fallback                       Keep default provider, no cross-provider fallback
 --no-cache                          Skip response cache
+--no-budget                         Disable the self-budget abort — let calls run
+                                      to the provider's per-request ceiling. No-limit
+                                      harnesses only (Pi core). = SURF_NO_TIMEOUT=1
 --json                              Normalized envelope as JSON
 --raw-json                          Raw provider response (bypasses cache)
 --confirm-expensive                 Allow operations estimated > 10 credits
@@ -314,6 +334,21 @@ surf-search-skill search "compare X vs Y" "alternatives to X" "X security issues
 
 This is the recommended way for an agent to gather multi-source context in
 one shot, instead of looping with N separate bash calls.
+
+**Need true parallelism?** `surf-search-skill search-parallel` runs the queries
+**concurrently** through a bounded worker pool (default 6, cap 16), tolerant of
+partial failures (one 429 rotates keys/backs off; the batch never aborts). It
+accepts positional queries and/or a JSON `--queries-file`
+(`[ "q", {"q":"…","id":"…","sub":"…"} ]`) and groups output by sub-question:
+
+```bash
+surf-search-skill search-parallel "angle A" "angle B" "angle C" --concurrency 6 --json
+surf-search-skill search-parallel --queries-file q.json --concurrency 8 --no-budget --json
+```
+
+On a no-limit harness (Pi core) add `--no-budget`; on time-limited harnesses
+keep `--concurrency` modest or split the file. The **`surf-parallel-skill`**
+skill wraps this with a fan-out gate, extraction, and cited synthesis.
 
 ---
 
@@ -442,11 +477,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v4.1.0)
+## Repository layout (v4.2.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 4.1.0, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 4.2.0, 3 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE
@@ -457,8 +492,12 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 │   ├── surf-search-skill.mjs          ← multi-provider web search CLI
 │   └── surf-plan-skill.mjs            ← planning workflow CLI
 ├── skills/
-│   └── surf-plan-skill/
-│       └── SKILL.md                   ← surf-plan-skill (planning skill)
+│   ├── surf-plan-skill/
+│   │   └── SKILL.md                   ← surf-plan-skill (planning skill)
+│   ├── surf-parallel-skill/
+│   │   └── SKILL.md                   ← surf-parallel-skill (parallel fan-out research)
+│   └── surf-deep-plan-skill/
+│       └── SKILL.md                   ← surf-deep-plan-skill (ambiguity-exhaustive planning)
 ├── src/
 │   ├── index.mjs                      ← library entry (search/extract/research/...)
 │   ├── env.mjs                        ← key discovery (opts > env > .env > config)
@@ -469,7 +508,8 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 │   │   ├── cache.mjs                  ← TTL response cache
 │   │   ├── audit.mjs                  ← audit + usage JSONL
 │   │   ├── flags.mjs, cost.mjs, format.mjs
-│   │   ├── dispatch.mjs               ← provider/key fallback + self-budget
+│   │   ├── dispatch.mjs               ← provider/key fallback + self-budget (+ --no-budget)
+│   │   ├── pool.mjs                   ← bounded-concurrency worker pool (search-parallel)
 │   │   ├── keys-cmd.mjs               ← surf-search-skill keys add/remove/...
 │   │   ├── setup.mjs                  ← interactive onboarding (with validation)
 │   │   ├── project-config.mjs         ← surf-search-skill project-config

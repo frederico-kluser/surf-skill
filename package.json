@@ -1,7 +1,7 @@
 {
   "name": "surf-skill",
-  "version": "4.1.0",
-  "description": "Multi-skill bundle for AI coding agents: surf-search-skill (multi-provider web search via Tavily + Parallel + Brave) + surf-plan-skill (research-driven execution planning). Includes `surf` interactive setup with live key validation, automatic provider fallback, multi-key rotation, --mode tiers, per-project timeout config, and a Node library.",
+  "version": "4.2.0",
+  "description": "Multi-skill bundle for AI coding agents: surf-search-skill (multi-provider web search via Tavily + Parallel + Brave, with parallel fan-out), surf-plan-skill (research-driven execution planning), surf-parallel-skill (maximum-information parallel research), and surf-deep-plan-skill (ambiguity-exhaustive planning). Includes `surf` interactive setup with live key validation, automatic provider fallback, multi-key rotation, --mode tiers, per-project + --no-budget timeout config, and a Node library.",
   "type": "module",
   "main": "./src/index.mjs",
   "exports": {

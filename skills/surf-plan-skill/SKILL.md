@@ -5,7 +5,7 @@ license: MIT
 argument-hint: "[task to plan, e.g. 'add rate limiting to the Express API']"
 allowed-tools: Bash(surf-search-skill:*), Bash(surf-plan-skill:*), Read, Glob, Grep, Write, Edit, WebSearch, WebFetch, AskUserQuestion
 metadata:
-  version: "4.1.0"
+  version: "4.2.0"
   requires: "node>=18; surf-search-skill in PATH (npm i -g surf-skill) for Layer A research; harness WebSearch/WebFetch as Layer B fallback; plan dir at ~/.claude/plans/ (or ./plans/ if it exists in the project)"
 ---
 
@@ -16,6 +16,10 @@ You are the agent the user is talking to. When the user asks for a plan
 **Skipping phases is forbidden.** This skill exists because plans that
 skip web research go stale fast and plans that skip project discovery
 recommend things the codebase already has.
+
+> Need EVERY ambiguity surfaced and answered BEFORE any plan (high-stakes,
+> very vague, or hard-to-reverse work)? Use **surf-deep-plan-skill**, which
+> front-loads a full ambiguity sweep on top of this same research gate.
 
 ## THE GATE — read this before anything else
 

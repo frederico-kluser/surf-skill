@@ -18,10 +18,19 @@ const VERSION = '3.0.1';
 // Detect the agent harness's bash timeout from env vars. The number is the
 // total time (ms) the harness will allow our process to live before SIGTERM.
 // We use this to abort early with an actionable error instead of being killed
-// silently.
-export function detectHarnessBudgetMs() {
+// silently. Returns Infinity when the caller has opted out of the budget
+// entirely (no-limit harnesses like Pi Coding Agent core, which applies NO
+// default bash timeout).
+export function detectHarnessBudgetMs(flags = {}) {
+  // Explicit "no limit": --no-budget flag, SURF_NO_TIMEOUT=1, or
+  // SURF_AGENT_BUDGET_MS=0. Disables the self-budget abort below and lets each
+  // request fall back to the provider's own per-request ceiling
+  // (SURF_TIMEOUT_MS || 45s). Use only when the harness will NOT kill long
+  // calls — otherwise the call dies silently to SIGTERM.
+  if (flags['no-budget'] || flags.noBudget || process.env.SURF_NO_TIMEOUT === '1') return Infinity;
   if (process.env.SURF_AGENT_BUDGET_MS) {
     const n = Number(process.env.SURF_AGENT_BUDGET_MS);
+    if (n === 0) return Infinity; // explicit unlimited
     if (Number.isFinite(n) && n > 0) return n;
   }
   if (process.env.BASH_DEFAULT_TIMEOUT_MS) {
@@ -40,7 +49,11 @@ export function detectHarnessBudgetMs() {
   return 30_000;
 }
 
-export function detectHarnessName() {
+export function detectHarnessName(flags = {}) {
+  if (flags['no-budget'] || flags.noBudget || process.env.SURF_NO_TIMEOUT === '1') {
+    return 'no-limit (--no-budget / SURF_NO_TIMEOUT)';
+  }
+  if (process.env.SURF_AGENT_BUDGET_MS === '0') return 'no-limit (SURF_AGENT_BUDGET_MS=0)';
   if (process.env.SURF_AGENT_BUDGET_MS) return 'override';
   if (process.env.BASH_DEFAULT_TIMEOUT_MS) return 'claude-code';
   if (process.env.PI_BASH_DEFAULT_TIMEOUT_SECONDS) return 'pi';
@@ -122,10 +135,11 @@ function backoff(attempt) {
 
 export async function dispatch(operation, args, flags = {}, runCtx = {}) {
   const startTs = Date.now();
-  const harnessBudget = detectHarnessBudgetMs();
-  const harnessName = detectHarnessName();
+  const harnessBudget = detectHarnessBudgetMs(flags);
+  const harnessName = detectHarnessName(flags);
+  const unlimited = !Number.isFinite(harnessBudget);
   // Reserve a cushion so we surface the error before the harness kills us.
-  const cushion = Math.min(2000, Math.floor(harnessBudget * 0.1));
+  const cushion = unlimited ? 0 : Math.min(2000, Math.floor(harnessBudget * 0.1));
 
   // Library mode: caller can pass an in-memory state object to avoid touching
   // ~/.config/surf/keys.json. State mutations (last_ok_provider, burned) stay
@@ -191,28 +205,35 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
       attempted.add(keyIdx);
       progress.start(`${operation} → ${providerName} (key #${keyIdx})`);
 
-      // Self-budget check: abort BEFORE the harness SIGTERMs us.
-      const elapsed = Date.now() - startTs;
-      const remaining = harnessBudget - elapsed - cushion;
-      if (remaining <= 1000) {
-        throw new DispatchError(
-          'LikelyAgentTimeout',
-          `Operation '${operation}' would likely exceed the agent's bash timeout ` +
-          `(~${Math.round(harnessBudget / 1000)}s detected, harness=${harnessName}). ` +
-          `Run 'surf-search-skill project-config' in this project to raise the limit, ` +
-          `or use 'research-start' + 'research-poll' for long jobs.`,
-          { harness: harnessName, budgetMs: harnessBudget, elapsedMs: elapsed },
-        );
+      // Self-budget check: abort BEFORE the harness SIGTERMs us. Skipped
+      // entirely when unlimited (--no-budget / no-limit harness like Pi).
+      let remaining = Infinity;
+      if (!unlimited) {
+        const elapsed = Date.now() - startTs;
+        remaining = harnessBudget - elapsed - cushion;
+        if (remaining <= 1000) {
+          throw new DispatchError(
+            'LikelyAgentTimeout',
+            `Operation '${operation}' would likely exceed the agent's bash timeout ` +
+            `(~${Math.round(harnessBudget / 1000)}s detected, harness=${harnessName}). ` +
+            `Run 'surf-search-skill project-config' in this project to raise the limit, ` +
+            `pass --no-budget if this harness has NO bash timeout (e.g. Pi core), ` +
+            `or use 'research-start' + 'research-poll' for long jobs.`,
+            { harness: harnessName, budgetMs: harnessBudget, elapsedMs: elapsed },
+          );
+        }
       }
 
       const ctx = {
         key: state[providerName].keys[keyIdx],
         // Constrain HTTP timeout to whatever's left in our budget so we don't
-        // sit waiting beyond what the harness will allow.
-        timeout: Math.min(
-          flags.timeout ? Number(flags.timeout) : Infinity,
-          remaining,
-        ),
+        // sit waiting beyond what the harness will allow. When unlimited, pass
+        // undefined so the provider uses its own per-request ceiling
+        // (SURF_TIMEOUT_MS || 45s) — never Infinity, which Node's setTimeout
+        // clamps to ~1ms and would abort the request immediately.
+        timeout: unlimited
+          ? (flags.timeout ? Number(flags.timeout) : undefined)
+          : Math.min(flags.timeout ? Number(flags.timeout) : Infinity, remaining),
         version: VERSION,
       };
 
