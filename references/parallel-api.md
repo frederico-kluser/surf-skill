@@ -102,14 +102,29 @@ Returns **HTTP 202** with `{ run_id, status: "queued" \| "running", is_active, p
 }
 ```
 
-Processor mapping used by `surf-search-skill research`:
+Processor mapping used by `surf-research-skill research` (`--model` is a
+4-tier shorthand; pass `--processor <tier>` directly for the full 9-tier
+ladder — already accepted by `research`/`research-start`, it just bypasses
+the `--model` lookup):
 
-| `--model` | Parallel processor |
-|---|---|
-| `mini` | `lite` |
-| `auto` | `base` |
-| `pro` | `pro` |
-| `ultra` | `ultra` |
+| `--model` | `--processor` | Latency | Strengths | Max fields |
+|---|---|---|---|---|
+| `mini` | `lite` | 10s–60s | basic metadata, fallback, low latency | ~2 |
+| `auto` | `base` | 15s–100s | reliable standard enrichments | ~5 |
+| — | `core` | 60s–5min | cross-referenced, moderately complex | ~10 |
+| — | `core2x` | 60s–10min | high-complexity cross-referenced | ~10 |
+| `pro` | `pro` | 2min–10min | exploratory web research | ~20 |
+| `ultra` | `ultra` | 5min–25min | advanced multi-source deep research | ~20 |
+| — | `ultra2x` | 5min–50min | difficult deep research | ~25 |
+| — | `ultra4x` | 5min–90min | very difficult deep research | ~25 |
+| — | `ultra8x` | 5min–2hr | the most difficult deep research | ~25 |
+
+Every tier also has a **`-fast` variant** (`core-fast`, `pro-fast`,
+`ultra-fast`, …): 2-5x lower latency, optimized for speed over absolute data
+freshness. Prefer standard tiers for real-time-sensitive facts (stock
+prices, breaking news, live scores) or unattended background jobs;
+prefer `-fast` for interactive/agent workflows where near-fresh data is
+plenty. Source: <https://docs.parallel.ai/task-api/guides/choose-a-processor>.
 
 Doc: <https://docs.parallel.ai/task-api/task-quickstart>,
 <https://docs.parallel.ai/task-api/guides/choose-a-processor>

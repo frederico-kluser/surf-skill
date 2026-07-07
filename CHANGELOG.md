@@ -1,5 +1,116 @@
 # Changelog
 
+## v5.0.0 — consolidation: 4 skills → 2, mode routers, provider deep-dive
+
+The 4-skill lineup from v4.2.0 asked the calling agent to pick the right
+tool up front (`surf-search-skill` vs `surf-parallel-skill`,
+`surf-plan-skill` vs `surf-deep-plan-skill`) based on trigger-phrase
+matching. This release removes that choice: each remaining skill now reads
+the request itself and routes to the right depth internally.
+
+### Why
+
+Skill selection by trigger phrase is fragile — two near-duplicate skill
+descriptions competing for the same kind of request is exactly the pattern
+Anthropic's own multi-agent research write-up warns against ("teach the
+orchestrator how to delegate" only works when there's one delegator making
+one decision, not several similarly-worded tools hoping to get picked). The
+fix is architectural: fold the "deep" variant into the "normal" skill as an
+explicit, stated decision (a Mode Router / Mode Decision phase), instead of
+shipping it as a separate skill file. This also gave us the excuse to
+actually research how to get more out of Tavily and Parallel AI rather than
+just renaming files — see Sources below.
+
+### Breaking changes
+
+- **`surf-search-skill` → `surf-research-skill`.** Skill name, npm bin,
+  `allowed-tools` entries, symlinks, and every doc reference renamed.
+  Scripts calling `surf-search-skill <subcommand>` must switch to
+  `surf-research-skill <subcommand>`.
+- **`surf-parallel-skill` removed** — its fan-out protocol (fan-out gate,
+  Research Ledger, source-category-diverse queries, dedup/contradiction
+  rules) is now `surf-research-skill`'s **Parallel**/**Deep** mode, chosen
+  automatically by the new Mode Router.
+- **`surf-deep-plan-skill` removed** — its ambiguity sweep (taxonomy, EARS
+  gap test, two-implementations test, two-lock gate) is now
+  `surf-plan-skill`'s **Deep** mode, chosen automatically by the new Mode
+  Decision phase (or still explicitly requested: "raise all my doubts
+  first", "levante todas as dúvidas").
+- `harness-install.mjs::SKILLS` now lists 2 entries instead of 4;
+  `LEGACY_NAMES` gained `surf-search-skill`, `surf-parallel-skill`,
+  `surf-deep-plan-skill` so upgrading cleanly removes the old symlinks
+  before creating the new ones (same discipline as the v4.0.0 rename).
+- npm package name is unchanged (`surf-skill`); `npm i -g surf-skill`
+  continues to work and now installs 2 skills + 3 bins.
+
+### Added
+
+- **Mode Router (`surf-research-skill`)**: resolves harness class
+  (no-limit/Pi vs time-limited) and query complexity (one fact → **Normal**;
+  2-5 angle comparison → **Parallel**; broad/exhaustive → **Deep**), then
+  states the chosen mode before doing anything. On a no-limit harness, Deep
+  mode can genuinely **iterate** — up to 3 waves, evaluating the Research
+  Ledger for gaps between waves — mirroring the "lead agent decides whether
+  more research is needed" loop from Anthropic's Research system, which is
+  safe here specifically because Pi core has no bash timeout to race
+  against. Hard-capped at 3 waves; time-limited harnesses never iterate.
+- **Mode Decision (`surf-plan-skill`)**: after project discovery, decides
+  Normal vs Deep from explicit request, reversibility, or a genuine
+  divergence between two plausible implementations — instead of the user
+  needing to know a second skill name exists.
+- **"How to research and resolve a technical doubt"** — a new, much more
+  detailed protocol in `surf-plan-skill`: query craft (start wide then
+  narrow, <400 chars), source-category diversity (vendor docs / community /
+  spec / advisory / benchmark / primary research), and a fixed
+  contradiction-resolution order (recency > authority > corroboration).
+- **Full Parallel Task API processor documentation.** `--processor <tier>`
+  was already accepted by `research`/`research-start` (passed straight
+  through `dispatch` → `researchStart`) but entirely undocumented — `--model`
+  only ever exposed 4 of the real 9 tiers. Now documented in
+  `references/parallel-api.md`, `references/COSTS.md`, the CLI `--help`
+  text, and `surf-research-skill`'s own SKILL.md: `lite`, `base`, `core`,
+  `core2x`, `pro`, `ultra`, `ultra2x`, `ultra4x`, `ultra8x`, each with a
+  `-fast` variant (2-5x lower latency, trades absolute freshness for speed).
+- **Tavily query-optimization guidance** added to `references/tavily-api.md`
+  and `surf-research-skill`'s SKILL.md: the 400-character query guideline,
+  chunks-vs-content selection, `exact_match` usage, and the
+  search-then-extract two-step pattern — all from Tavily's own
+  best-practices docs.
+- Fixed a version-drift bug found while bumping: `src/lib/dispatch.mjs` and
+  `src/validators/index.mjs` had been stuck at `VERSION = '3.0.1'` since
+  v3.0.1 despite the CHANGELOG claiming these were bumped in v4.0.0; both
+  now correctly read `5.0.0` (affects the `X-Client-Name` header sent to
+  providers).
+
+### Sources consulted
+
+- [How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) (Anthropic, Jun 2025) — "scale effort to query complexity", "teach the orchestrator how to delegate", "start wide, then narrow", parallel tool calling, and the guardrail against unbounded iteration all trace to this post.
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) (Anthropic, Sep 2025).
+- [Tavily — Best Practices for Search](https://docs.tavily.com/documentation/best-practices/best-practices-search).
+- [Parallel — Choose a processor](https://docs.parallel.ai/task-api/guides/choose-a-processor).
+
+### Migration
+
+```bash
+npm i -g surf-skill@latest
+
+# Verify:
+surf --version                  # 5.0.0
+surf-research-skill --version   # 5.0.0 (was surf-search-skill)
+surf-plan-skill --version       # 5.0.0
+
+# Update any scripts:
+#   surf-search-skill ...  →  surf-research-skill ...
+
+# Check symlinks (old 4-skill set replaced by 2; legacy ones auto-removed):
+ls ~/.claude/skills/   # surf-research-skill + surf-plan-skill (no surf-search-skill,
+                       #  no surf-parallel-skill, no surf-deep-plan-skill)
+```
+
+No behavior your agent relied on was removed — the parallel fan-out
+protocol and the ambiguity sweep both still exist, just as internal modes
+instead of separate skills you had to know to ask for.
+
 ## v4.2.0 — parallel fan-out, two new skills, and the Pi no-limit stance
 
 Adds a real **parallel search** path and two skills tuned for it, and corrects

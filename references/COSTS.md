@@ -45,13 +45,21 @@ used only by `lib/cost.mjs` to gate expensive calls.
 | `search` (lite processor) | 1 |
 | `search` (base processor — set by `--depth advanced`) | 2 |
 | `extract` (any) | 1 per 5 URLs |
-| `tasks/runs` lite (≈ `--model mini`) | 1 |
-| `tasks/runs` base (≈ `--model auto`) | 2 |
-| `tasks/runs` core | 5 |
-| `tasks/runs` pro (≈ `--model pro`) | 8 |
-| `tasks/runs` ultra (≈ `--model ultra`) | 25 |
-| `tasks/runs` ultra8x | 200 |
+| `tasks/runs` lite (`--model mini` / `--processor lite`) | 1 |
+| `tasks/runs` base (`--model auto` / `--processor base`) | 2 |
+| `tasks/runs` core (`--processor core`) | 5 |
+| `tasks/runs` core2x (`--processor core2x`) | 8 |
+| `tasks/runs` pro (`--model pro` / `--processor pro`) | 8 |
+| `tasks/runs` ultra (`--model ultra` / `--processor ultra`) | 25 |
+| `tasks/runs` ultra2x (`--processor ultra2x`) | 50 |
+| `tasks/runs` ultra4x (`--processor ultra4x`) | 100 |
+| `tasks/runs` ultra8x (`--processor ultra8x`) | 200 |
 | `crawl`, `map` | n/a (not supported) |
+
+Every tier also has a `-fast` variant (e.g. `pro-fast`) — same estimated
+credit cost, 2-5x lower latency, optimized for speed over absolute
+freshness. See `references/parallel-api.md` for the full latency/use-case
+table and when to reach for each tier.
 
 ## Rules of thumb
 

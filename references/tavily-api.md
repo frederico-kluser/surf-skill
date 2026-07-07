@@ -88,3 +88,27 @@ Account usage. Free.
 - `401` bad/missing key
 - `429` rate limit (retry with backoff)
 - `432`, `433` plan/quota limits — escalate to user
+
+## Best practices (from Tavily's own guidance)
+
+- **Keep queries under ~400 characters.** Write it like a search query, not
+  a long-form prompt.
+- **Break complex/multi-topic questions into separate focused queries**
+  rather than one query trying to cover everything — this is exactly what
+  `search-parallel`/`search` batching already does; keep doing it.
+- **`search_depth` trades latency for relevance**: `ultra-fast` (lowest
+  latency, lower relevance, content) < `fast` (low latency, good relevance,
+  chunks) < `basic` (medium latency, high relevance, content) < `advanced`
+  (highest latency, highest relevance, chunks).
+- **Chunks vs content**: chunks are short, reranked snippets — use them when
+  you need something specific aligned to the query (`fast`/`advanced`).
+  Content is an NLP summary of the whole page — use it when a general read
+  is enough (`basic`/`ultra-fast`).
+- **`exact_match`** (query wrapped in quotes) narrows to a verbatim
+  name/phrase — use for due diligence, entity resolution, compliance
+  lookups; not for open questions (it can return empty on a non-exact hit).
+- **Two-step depth**: `search` to find URLs, then `extract` the 1-3 best
+  ones. Snippets alone are rarely enough to cite a claim confidently.
+- **`auto_parameters=true` always costs 2 credits**, even when it picks
+  `basic` internally — set `search_depth` explicitly to control cost.
+- Source: <https://docs.tavily.com/documentation/best-practices/best-practices-search>.

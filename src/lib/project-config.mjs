@@ -1,4 +1,4 @@
-// `surf-search-skill project-config` — writes per-project harness config to raise
+// `surf-research-skill project-config` — writes per-project harness config to raise
 // the bash timeout that the harness uses. Detects which harness is in use
 // from the presence of `.github/`, `.claude/`, `.pi/` in the cwd. With
 // --harness, forces a specific target.
@@ -15,7 +15,7 @@ const PATCHES = {
   copilot: {
     file: '.github/copilot-hooks.json',
     patch: { timeoutSec: 300 },
-    why: 'GH Copilot CLI default bash timeout is 30s — surf-search-skill needs more.',
+    why: 'GH Copilot CLI default bash timeout is 30s — surf-research-skill needs more.',
   },
   claude: {
     // .claude/settings.local.json is gitignored by Anthropic convention.
@@ -132,7 +132,7 @@ export async function runProjectConfig(_pos, flags = {}, cwd = process.cwd()) {
 
 export function formatProjectConfigResult(result, { json = false } = {}) {
   if (json) return JSON.stringify(result, null, 2);
-  const lines = [`✓ surf-search-skill project-config in ${result.cwd}`];
+  const lines = [`✓ surf-research-skill project-config in ${result.cwd}`];
   for (const r of result.results) {
     lines.push(`  • ${r.harness}: wrote ${r.file}`);
     lines.push(`      ${r.why}`);
@@ -145,7 +145,7 @@ export function formatProjectConfigResult(result, { json = false } = {}) {
     lines.push('ℹ .claude/settings.local.json is .gitignored by convention (per-user).');
   }
   if (result.targets.includes('pi')) {
-    lines.push('ℹ Pi core has no bash timeout; .pi/settings.json only matters with the `pi-bash-timeout` extension. For long calls, run `surf-search-skill ... --no-budget`.');
+    lines.push('ℹ Pi core has no bash timeout; .pi/settings.json only matters with the `pi-bash-timeout` extension. For long calls, run `surf-research-skill ... --no-budget`.');
   }
   return lines.join('\n');
 }

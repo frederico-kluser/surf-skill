@@ -1,7 +1,7 @@
 // surf-skill — library entry point (npm package name = `surf-skill`).
 // Named exports for each operation. CLI bins live at:
 //   bin/surf.mjs              (interactive setup + key validation)
-//   bin/surf-search-skill.mjs (multi-provider web search CLI)
+//   bin/surf-research-skill.mjs (multi-provider web search CLI)
 //   bin/surf-plan-skill.mjs   (research-grounded planning CLI)
 //
 // Usage:

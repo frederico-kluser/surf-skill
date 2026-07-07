@@ -24,12 +24,18 @@ export const HARNESS_DIRS = [
 
 // Legacy skill names removed on upgrade so stale symlinks don't shadow the
 // current ones. Includes:
-//   tavily     — pre-rename (before surf-skill)
-//   tvly       — short alias from early experiments
-//   surf       — `surf` is a CLI binary now; would clash with the bin in PATH
-//   surf-skill — pre-v4 search-skill name (renamed to surf-search-skill)
-//   surf-plan  — standalone v1 (folded in as surf-plan-skill in v3+)
-const LEGACY_NAMES = ['tavily', 'tvly', 'surf', 'surf-skill', 'surf-plan'];
+//   tavily             — pre-rename (before surf-skill)
+//   tvly               — short alias from early experiments
+//   surf               — `surf` is a CLI binary now; would clash with the bin in PATH
+//   surf-skill         — pre-v4 search-skill name (renamed to surf-search-skill, then surf-research-skill)
+//   surf-plan          — standalone v1 (folded in as surf-plan-skill in v3+)
+//   surf-search-skill  — pre-v5 search-skill name (renamed to surf-research-skill)
+//   surf-parallel-skill  — v4.2 parallel-fan-out skill (folded into surf-research-skill in v5)
+//   surf-deep-plan-skill — v4.2 ambiguity-sweep skill (folded into surf-plan-skill in v5)
+const LEGACY_NAMES = [
+  'tavily', 'tvly', 'surf', 'surf-skill', 'surf-plan',
+  'surf-search-skill', 'surf-parallel-skill', 'surf-deep-plan-skill',
+];
 
 export async function symlinkOrCopy(target, link) {
   // If link already exists, decide whether to replace it.
@@ -85,19 +91,18 @@ export async function unlinkIfOurs(link, expectedTarget) {
 }
 
 // Install ALL skills shipped by this package:
-//   - surf-search-skill    → pkgRoot                              (root SKILL.md, search engine)
-//   - surf-plan-skill      → pkgRoot/skills/surf-plan-skill/      (planning workflow)
-//   - surf-parallel-skill  → pkgRoot/skills/surf-parallel-skill/  (parallel fan-out research)
-//   - surf-deep-plan-skill → pkgRoot/skills/surf-deep-plan-skill/ (ambiguity-exhaustive planning)
+//   - surf-research-skill → pkgRoot                         (root SKILL.md; search, parallel
+//                                                             fan-out, and async deep research,
+//                                                             auto-routed by the skill itself)
+//   - surf-plan-skill     → pkgRoot/skills/surf-plan-skill/ (planning workflow; auto-routes
+//                                                             into an ambiguity-sweep mode for
+//                                                             high-stakes/vague work)
 //
-// Each harness gets one symlink per skill (e.g. ~/.claude/skills/surf-search-skill,
-// …/surf-plan-skill, …/surf-parallel-skill, …/surf-deep-plan-skill; same for
-// .agents/.codex/.pi).
+// Each harness gets one symlink per skill (e.g. ~/.claude/skills/surf-research-skill,
+// …/surf-plan-skill; same for .agents/.codex/.pi).
 const SKILLS = [
-  { name: 'surf-search-skill',    subdir: null },                           // root of package
-  { name: 'surf-plan-skill',      subdir: 'skills/surf-plan-skill' },
-  { name: 'surf-parallel-skill',  subdir: 'skills/surf-parallel-skill' },
-  { name: 'surf-deep-plan-skill', subdir: 'skills/surf-deep-plan-skill' },
+  { name: 'surf-research-skill', subdir: null },                      // root of package
+  { name: 'surf-plan-skill',     subdir: 'skills/surf-plan-skill' },
 ];
 
 export async function installSkill(pkgRoot) {

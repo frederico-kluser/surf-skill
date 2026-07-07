@@ -9,7 +9,7 @@ import { listPlans, readPlan, newPlanStub } from '../src/plan/plan-file.mjs';
 import { slugify } from '../src/plan/slug.mjs';
 import { checkSurfSkill } from '../src/lib/check-surf-skill.mjs';
 
-const VERSION = '4.2.0';
+const VERSION = '5.0.0';
 
 const HELP = `surf-plan-skill — research-grounded execution planning skill
 
@@ -21,7 +21,7 @@ Commands:
   list                       List plan files (newest first)
   show <slug-substring>      Cat a plan file (resolves by substring)
   new <task title>           Create a stub plan file, print path
-  doctor                     Check surf-search-skill is installed + has keys
+  doctor                     Check surf-research-skill is installed + has keys
   --help, -h                 Show this help
   --version, -v              Show version
 
@@ -32,18 +32,22 @@ Plan dir resolution:
   4. ~/.claude/plans/ (default)
 
 How the workflow runs (your AI agent does this when you ask for a plan):
-  Phase 0  Resolve research layer — surf-search-skill CLI, or the
+  Phase 0  Resolve research layer — surf-research-skill CLI, or the
            harness's WebSearch/WebFetch when Bash is blocked (plan mode)
   Phase 1  Project discovery — read CLAUDE.md, package.json, source tree
-  Phase 2  Baseline web research — batched, 3 queries (REQUIRED)
-  Phase 3  Open the conversation — what we read + what the web says
-  Phase 4  Clarifying questions — MAX 5, each preceded by a search
-  Phase 5  Synthesis research — verify choices against latest sources
-  Phase 6  Deliver — plan file (or plan-mode approval first), with a
-           Research Ledger + [^N] footnote citations
+  Phase 2  MODE DECISION — Normal (most plans) or Deep (vague/high-stakes/
+           hard-to-reverse, or the user asked to "raise all doubts first")
+  Normal:  baseline research → open conversation → clarify (MAX 5 Qs,
+           each preceded by a search) → synthesis research → deliver
+  Deep:    + a full AMBIGUITY SWEEP → Ambiguity Register BEFORE any
+           question, then research-grounded clarify (5-7 Qs) → synthesis
+           research → deliver (two-lock gate: ambiguity + research)
+  Deliver: plan file (or plan-mode approval first), with a Research
+           Ledger (+ Ambiguity Register in Deep mode) and [^N] citations
 
 THE GATE: the agent may not present any plan — including for plan-mode
-approval — before Phases 2 and 5 are in the Research Ledger.
+approval — before baseline and synthesis research are in the Research
+Ledger (Deep mode also requires a complete Ambiguity Register first).
 
 Tell your agent: "make a plan for X"
 Examples (your agent does the work):
@@ -119,20 +123,20 @@ async function cmdDoctor() {
 
   const surf = await checkSurfSkill();
   if (surf.installed) {
-    out(`\nsurf-search-skill: ✓ installed (${surf.version})`);
+    out(`\nsurf-research-skill: ✓ installed (${surf.version})`);
     if (surf.keyCounts) {
       const k = surf.keyCounts;
       const total = (k.tavily || 0) + (k.parallel || 0) + (k.brave || 0);
       out(`  keys:          ${total} total — tavily ${k.tavily}, parallel ${k.parallel}, brave ${k.brave}`);
       if (total === 0) {
-        out(`\n⚠ surf-search-skill has no keys. Run: surf-search-skill setup`);
+        out(`\n⚠ surf-research-skill has no keys. Run: surf-research-skill setup`);
         process.exitCode = 2;
       }
     }
   } else {
-    out(`\nsurf-search-skill: ✗ NOT installed`);
+    out(`\nsurf-research-skill: ✗ NOT installed`);
     out(`  ${surf.error || 'command not found'}`);
-    out(`  → Install: npm i -g surf-skill && surf-search-skill setup`);
+    out(`  → Install: npm i -g surf-skill && surf-research-skill setup`);
     process.exitCode = 1;
   }
 
