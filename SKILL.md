@@ -20,7 +20,7 @@ license: MIT
 argument-hint: "<question, URL, or topic to search / research>"
 allowed-tools: Bash(surf-research-skill:*), Bash(surf:*), Read, Write, Grep, Glob, WebSearch, WebFetch
 metadata:
-  version: "5.1.0"
+  version: "5.2.0"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill + surf-plan-skill); keys via `surf` (interactive, with live validation) or `surf-research-skill setup`; per-project bash timeout via `surf-research-skill project-config`, or --no-budget on no-timeout harnesses (Pi core)"
 ---
 

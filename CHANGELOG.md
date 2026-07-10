@@ -1,6 +1,6 @@
 # Changelog
 
-## v5.1.0 — new surf-free-skill (free, keyless search) + rotation hardening
+## v5.2.0 — new surf-free-skill (free, keyless search) + rotation hardening
 
 Adds a **third skill, `surf-free-skill`**: free, keyless web search over
 **Wikipedia + DuckDuckGo** — no API key, no setup. It is deliberately SEPARATE
@@ -51,7 +51,7 @@ so neither is an option.
   `capabilityMap` chain, so `surf-research-skill` stays keyed-only and still
   errors `NoProviderAvailable` with no keys — the free tier lives only in
   `surf-free-skill`.
-- Version bumped to 5.1.0 across all pinned locations.
+- Version bumped to 5.2.0 across all pinned locations.
 
 ### Sources consulted
 
@@ -68,7 +68,7 @@ so neither is an option.
 ```bash
 npm i -g surf-skill@latest
 surf-free-skill "your query"        # free, keyless — no key needed
-surf-research-skill --version       # 5.1.0 (still requires a key)
+surf-research-skill --version       # 5.2.0 (still requires a key)
 ```
 
 No config changes required. Existing `keys.json` files gain a `cooldowns: []`

@@ -74,7 +74,7 @@ async function doFetch(query, lang, srlimit, ctx) {
       headers: {
         'Accept': 'application/json',
         // Wikimedia requires a descriptive, contactable User-Agent.
-        'User-Agent': `surf-skill/${ctx.version || '5.1.0'} (https://github.com/frederico-kluser/surf-skill)`,
+        'User-Agent': `surf-skill/${ctx.version || '5.2.0'} (https://github.com/frederico-kluser/surf-skill)`,
       },
       signal: ctl.signal,
     });

@@ -47,7 +47,7 @@ plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-
 
 | | |
 |---|---|
-| **Status** | v5.1.0 (npm) |
+| **Status** | v5.2.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-research-skill` · `surf-plan-skill` (each auto-routes between a fast and a deep mode) |
 | **Bins shipped** | `surf` (interactive setup + validation), `surf-research-skill`, `surf-plan-skill` |
@@ -59,7 +59,7 @@ plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-
 ## Quickstart (60 seconds)
 
 ```bash
-npm i -g surf-skill          # installs BOTH skills + 3 bins (cross-OS)
+npm i -g surf-skill          # installs all 3 skills + 4 bins (cross-OS)
 surf                         # interactive: add keys with LIVE validation
                              #   ✓ valid (tavily, HTTP 200, 1.2s, 1 credit)
                              #   ✗ invalid (auth, HTTP 401) — NOT saved
@@ -490,11 +490,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v5.1.0)
+## Repository layout (v5.2.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 5.1.0, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 5.2.0, 4 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE
@@ -524,7 +524,7 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 │   │   ├── project-config.mjs         ← surf-research-skill project-config
 │   │   ├── progress.mjs               ← stderr progress events
 │   │   ├── check-surf-skill.mjs       ← detect companion CLI in PATH
-│   │   ├── harness-install.mjs        ← cross-OS symlink install for 2 skills
+│   │   ├── harness-install.mjs        ← cross-OS symlink install for 3 skills
 │   │   ├── api/                       ← library search/extract/crawl/map/research
 │   │   └── providers/
 │   │       ├── index.mjs              ← capability map (search + 3 providers)

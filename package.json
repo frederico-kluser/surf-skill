@@ -1,6 +1,6 @@
 {
   "name": "surf-skill",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "Three-skill bundle for AI coding agents: surf-research-skill (multi-provider web research via Tavily + Parallel + Brave — single lookup, parallel fan-out, or async deep research, auto-routed by query complexity and harness), surf-plan-skill (research-driven execution planning that auto-routes into a full ambiguity-sweep mode for high-stakes work), and surf-free-skill (free, keyless web search via Wikipedia + DuckDuckGo — no API key). Includes `surf` interactive setup with live key validation, automatic provider fallback, multi-key rotation, --mode tiers, per-project + --no-budget timeout config, and a Node library.",
   "type": "module",
   "main": "./src/index.mjs",

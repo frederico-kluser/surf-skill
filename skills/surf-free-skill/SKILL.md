@@ -16,7 +16,7 @@ license: MIT
 argument-hint: "<what to look up, free — e.g. 'Alan Turing'>"
 allowed-tools: Bash(surf-free-skill:*), Read
 metadata:
-  version: "5.1.0"
+  version: "5.2.0"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill + surf-plan-skill + surf-free-skill); NO API key needed — search is answered by Wikipedia + DuckDuckGo."
 ---
 

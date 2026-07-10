@@ -22,7 +22,7 @@ import { validateKey, formatValidation } from '../src/validators/index.mjs';
 import { HARNESS_DIRS } from '../src/lib/harness-install.mjs';
 import { KEYLESS_PROVIDERS } from '../src/lib/providers/index.mjs';
 
-const VERSION = '5.1.0';
+const VERSION = '5.2.0';
 
 const HELP = `surf — multi-skill setup & validation
 
