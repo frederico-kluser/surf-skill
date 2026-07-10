@@ -136,8 +136,8 @@ export async function keysList(_pos, flags) {
     }
     lines.push('');
   }
-  lines.push(`## keyless fallback (always on — works with zero keys)`);
-  lines.push(`- \`${[...KEYLESS_PROVIDERS].join('`, `')}\` — free, no API key; used only when the keyed providers above are absent or exhausted, so \`search\` always returns something`);
+  lines.push(`## free, no-key search`);
+  lines.push(`- Need a lookup without any key? Use the separate \`surf-free-skill\` (${[...KEYLESS_PROVIDERS].join(' + ')}). surf-research-skill itself requires a key.`);
   return { text: lines.join('\n') };
 }
 

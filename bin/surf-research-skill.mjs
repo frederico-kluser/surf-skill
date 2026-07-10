@@ -66,8 +66,7 @@ Commands:
   keys <add|remove|list|reset|clear> [...]
 
 Global flags:
-  --provider <tavily|parallel|brave|wikipedia|ddg>  Force one provider, disables fallback
-                                   (wikipedia & ddg are the free, keyless search tier)
+  --provider <tavily|parallel|brave>  Force provider, disables fallback
   --mode <fast|normal|slow>      Search tier (per-provider mapping):
                                    fast   = Tavily depth=fast   / Brave count=5
                                    normal = Tavily depth=basic  / Brave count=10 (default)
@@ -105,8 +104,8 @@ Examples:
   cat keys.txt | surf-research-skill keys add --provider tavily --stdin       # one key per line
   surf-research-skill keys list
 
-Works with ZERO keys: the free, keyless wikipedia + ddg tier answers "search"
-until you add paid keys (then they take precedence automatically).
+Need free, no-key search? Use the separate surf-free-skill (Wikipedia +
+DuckDuckGo). surf-research-skill itself requires an API key.
 Key & state are stored in ~/.config/surf/keys.json (chmod 600).
 Docs: ~/.agents/skills/surf-research-skill/SKILL.md`;
 

@@ -95,6 +95,24 @@ function buildChain(operation, state, flags) {
     return { chain: [provider], pinned: true };
   }
 
+  // Keyless path: the standalone surf-free-skill sets flags.keyless to run a
+  // free, no-API-key search over wikipedia → ddg. It never touches keyed
+  // providers or keys.json, and is the ONLY way keyless providers are reached
+  // (they are not in any capabilityMap chain).
+  if (flags.keyless) {
+    if (operation !== 'search') {
+      throw new DispatchError('KeylessSearchOnly', `keyless mode only supports 'search' (got '${operation}')`);
+    }
+    const kc = [...KEYLESS_PROVIDERS];
+    if (flags.provider) {
+      if (!KEYLESS_PROVIDERS.has(flags.provider)) {
+        throw new DispatchError('NotKeyless', `--provider '${flags.provider}' is not keyless (use: ${kc.join(', ')})`);
+      }
+      return { chain: [flags.provider], pinned: true };
+    }
+    return { chain: kc, pinned: false };
+  }
+
   const baseChain = capabilityMap[operation];
   if (!Array.isArray(baseChain)) {
     throw new DispatchError('UnknownOperation', `operation '${operation}' is not registered`);

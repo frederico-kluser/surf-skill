@@ -13,19 +13,19 @@
 
 <p align="center">
   Multi-provider web skill for AI coding agents.<br/>
-  Fronts <strong>Tavily</strong>, <strong>Parallel AI</strong> and <strong>Brave</strong> behind a single CLI + Node library — with automatic key rotation, provider fallback, last-known-good persistence, and a free <strong>keyless tier</strong> (Wikipedia + DuckDuckGo) so <code>search</code> works with zero keys.
+  Fronts <strong>Tavily</strong>, <strong>Parallel AI</strong> and <strong>Brave</strong> behind a single CLI + Node library — with automatic key rotation, provider fallback, and last-known-good persistence. Ships a separate free, keyless search skill (<strong>surf-free-skill</strong>: Wikipedia + DuckDuckGo, no API key).
 </p>
 
 ---
 
-**Two skills. Three providers + a free keyless tier. One install.** `npm i -g surf-skill` bundles
+**Three skills. Three providers. One install.** `npm i -g surf-skill` bundles
 **`surf-research-skill`** (multi-provider web research — a single lookup,
 parallel fan-out, or async deep research, auto-routed by query complexity
-and harness) and **`surf-plan-skill`** (research-driven execution planning
+and harness), **`surf-plan-skill`** (research-driven execution planning
 that auto-routes into a full ambiguity-sweep mode for vague/high-stakes
-work), plus a friendly `surf` setup wrapper with live key validation. Each
-skill decides its own depth — you never have to pick between near-duplicate
-tools.
+work), and **`surf-free-skill`** (free, keyless web search via Wikipedia +
+DuckDuckGo — no API key), plus a friendly `surf` setup wrapper with live key
+validation. Each skill decides its own depth.
 
 ```
                   ┌──▶ Tavily   (search, extract, crawl, map, research)
@@ -35,8 +35,9 @@ crawl    ──┼──▶ surf-research-skill ──▶ Parallel (search, extr
 map      ──┤      │        │
 research ──┘      │        └─▶ mode router: Normal (1 call) / Parallel (fan-out)
                   │            / Deep (fan-out + async research, iterates on Pi)
-                  ├──▶ Brave    (search only — own index)
-                  └──▶ keyless: Wikipedia + DuckDuckGo (free, no key — always-on search fallback)
+                  └──▶ Brave    (search only — own index)
+
+free search  ──▶ surf-free-skill ──▶ Wikipedia + DuckDuckGo (keyless, no API key)
 
 plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-grounded)
                                        / Deep (+ ambiguity sweep, auto on
@@ -287,7 +288,7 @@ Full reference: `skills/surf-research-skill/SKILL.md`.
 Global flags every command accepts:
 
 ```
---provider <tavily|parallel|brave|wikipedia|ddg>  Force provider (disables fallback; wikipedia/ddg keyless)
+--provider <tavily|parallel|brave>  Force provider (disables fallback)
 --mode <fast|normal|slow>           Search tier. Per-provider mapping:
                                       fast   = Tavily depth=fast / Brave count=5
                                       normal = default
@@ -417,8 +418,8 @@ surf-research-skill search "x" --provider parallel
 
 ## Onboarding
 
-`search` works with **zero keys** via the free keyless tier (Wikipedia +
-DuckDuckGo) — add keys any time for higher-quality, general-web results.
+`surf-research-skill` needs an API key. (For free, no-key search, use the
+separate **`surf-free-skill`** — no setup at all.)
 
 ```bash
 # 1. Wizard (recommended in a TTY)
@@ -428,10 +429,12 @@ surf-research-skill setup
 surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC
 cat parallel-keys.txt | surf-research-skill keys add --provider parallel --stdin
 
-# 3. Run any command without keys
+# 3. Auto-launch in a TTY: run any command without keys
 surf-research-skill search "test"
-# → TTY, no keys: launches the setup wizard
-# → non-interactive, no keys: answered by the keyless tier (wikipedia → ddg)
+# → in a TTY with no keys: launches the setup wizard
+
+# Free, no-key search (separate skill, zero setup):
+surf-free-skill "your query"
 
 # 4. Library mode: env vars / .env / explicit opts (no setup needed)
 TAVILY_API_KEY=tvly-... node -e "import('surf-skill').then(m => m.search('x'))"

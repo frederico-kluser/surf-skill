@@ -1,14 +1,12 @@
 # Changelog
 
-## v5.1.0 — keyless fallback tier + always-deliver hardening
+## v5.1.0 — new surf-free-skill (free, keyless search) + rotation hardening
 
-`surf` now works with **zero API keys**. Previously every provider (Tavily,
-Parallel, Brave) required a key, so an agent-driven `search` with nothing
-configured threw `NoProviderAvailable` and exited non-zero — and Brave's free
-tier was discontinued in Feb 2026, leaving no zero-cost path. This release adds
-a free, **keyless bottom tier** (Wikipedia + DuckDuckGo) to the search fallback
-chain and hardens key rotation so a request is "always delivered": try the next
-key, then the next provider, then the free tier.
+Adds a **third skill, `surf-free-skill`**: free, keyless web search over
+**Wikipedia + DuckDuckGo** — no API key, no setup. It is deliberately SEPARATE
+from `surf-research-skill` (which stays keyed-only), so the two never mix — use
+`surf-free-skill` for free/no-key lookups and `surf-research-skill` for real
+general-web research. This release also hardens key rotation across the board.
 
 ### Why
 
@@ -26,12 +24,12 @@ so neither is an option.
 
 ### Added
 
-- **Keyless search tier** (`src/lib/providers/wikipedia.mjs`,
-  `src/lib/providers/ddg.mjs`): two free, no-key providers appended last to the
-  `search` chain (`tavily → parallel → brave → wikipedia → ddg`). Marked
-  `keyless: true` and kept out of `state.mjs`'s provider list, so they never
-  touch `keys.json`, `keys list`, setup, or validation. `search` now **never**
-  throws `NoProviderAvailable`.
+- **`surf-free-skill`** — new skill + bin (`bin/surf-free-skill.mjs`,
+  `skills/surf-free-skill/SKILL.md`): keyless `search` over `wikipedia → ddg`.
+  New providers `src/lib/providers/wikipedia.mjs` and `ddg.mjs` (`keyless: true`),
+  reached via a dedicated `flags.keyless` dispatch path — NOT part of
+  surf-research-skill's chain. Registered in `package.json` bin,
+  `harness-install.mjs` (symlinked on install), and the `surf` wrapper.
 - **Bulk `keys add`** (`src/lib/keys-cmd.mjs`): `keys add --provider X k1 k2 k3`
   adds many keys of one provider in a single call (validated in parallel), and
   `--stdin` reads newline-delimited keys (`cat keys.txt | … keys add --stdin`).
@@ -48,17 +46,18 @@ so neither is an option.
 - **Backoff now includes jitter** (`src/lib/dispatch.mjs`): capped exponential
   backoff + "equal jitter" (half fixed, half random), which sharply reduces
   synchronized retry storms across many keys/clients (AWS guidance below).
-- Dispatch special-cases keyless providers: exempt from the has-a-usable-key
-  chain filter and the `--provider` pin check, run with an undefined key, and
-  never update `last_ok_provider`/`current` — so the free tier is never promoted
-  ahead of the user's paid providers.
+- Dispatch special-cases keyless providers (undefined key; never written to
+  `keys.json`; never set as `last_ok_provider`). They are NOT in any
+  `capabilityMap` chain, so `surf-research-skill` stays keyed-only and still
+  errors `NoProviderAvailable` with no keys — the free tier lives only in
+  `surf-free-skill`.
 - Version bumped to 5.1.0 across all pinned locations.
 
 ### Sources consulted
 
 - [DuckDuckGo Instant Answer API](https://duckduckgo.com/duckduckgo-help-pages/features/instant-answers-and-other-features) — "not a full search results API … beyond our instant answers"; blank for most non-topic queries.
 - [MediaWiki API:Search](https://www.mediawiki.org/wiki/API:Search) — keyless full-text search; requires a descriptive User-Agent.
-- [Jina Reader/Search](https://jina.ai/reader/) — documents `s.jina.ai`; live probe now returns `401 AuthenticationRequiredError` (key required), so Jina was dropped from the keyless tier.
+- [Jina Reader/Search](https://jina.ai/reader/) — documents `s.jina.ai`; live probe now returns `401 AuthenticationRequiredError` (key required), so Jina was rejected for the keyless skill.
 - [AWS — Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — jitter "reduced our call count by more than half" under contention.
 - [Brave drops free Search API tier](https://www.implicator.ai/brave-drops-free-search-api-tier-puts-all-developers-on-metered-billing/) (Feb 2026) — why no keyed provider is free anymore.
 - [Bing Search API retirement](https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement) (Aug 2025) and [Google Custom Search JSON](https://developers.google.com/custom-search/v1/overview) (closed to new customers) — ruled out.
@@ -68,8 +67,8 @@ so neither is an option.
 
 ```bash
 npm i -g surf-skill@latest
-surf-research-skill --version              # 5.1.0
-surf-research-skill search "your query"    # works with NO keys (wikipedia → ddg)
+surf-free-skill "your query"        # free, keyless — no key needed
+surf-research-skill --version       # 5.1.0 (still requires a key)
 ```
 
 No config changes required. Existing `keys.json` files gain a `cooldowns: []`

@@ -103,6 +103,7 @@ export async function unlinkIfOurs(link, expectedTarget) {
 const SKILLS = [
   { name: 'surf-research-skill', subdir: null },                      // root of package
   { name: 'surf-plan-skill',     subdir: 'skills/surf-plan-skill' },
+  { name: 'surf-free-skill',     subdir: 'skills/surf-free-skill' },  // free, keyless search
 ];
 
 export async function installSkill(pkgRoot) {

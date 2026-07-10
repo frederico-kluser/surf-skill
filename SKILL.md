@@ -108,10 +108,7 @@ gaps remain, tell the user and offer to run a second call.
 
 ## First-time setup
 
-`search` works with **zero keys** — it falls back to a free, keyless tier
-(**Wikipedia** for broad results, **DuckDuckGo** for instant answers), so an
-agent can start immediately. Add keys for higher-quality, general-web results
-(paid providers take precedence automatically). To configure keys:
+`search` requires an API key. If none are configured, point the user at:
 
 ```bash
 surf-research-skill setup     # interactive wizard (TTY)
@@ -125,6 +122,9 @@ surf-research-skill keys add --provider parallel <key>
 cat brave-keys.txt | surf-research-skill keys add --provider brave --stdin
 ```
 
+> No keys and just need a quick free lookup? Use the separate **`surf-free-skill`**
+> (keyless Wikipedia + DuckDuckGo) instead.
+
 Keys live in `~/.config/surf/keys.json` (chmod 600) — never read from env at
 runtime.
 
@@ -136,13 +136,13 @@ The connector decides which provider to call based on:
 3. Which keys are healthy (`burned` keys are skipped, auto-reset monthly).
 
 Force a specific provider **only for debugging** with
-`--provider tavily|parallel|brave|wikipedia|ddg`. That disables fallback — failure means failure.
+`--provider tavily|parallel|brave`. That disables fallback — failure means failure.
 
 ## Capability table
 
 | Operation | Tavily | Parallel | Brave | Default order |
 |---|---|---|---|---|
-| `search` | ✓ | ✓ | ✓ | tavily → parallel → brave → **wikipedia → ddg** (keyless) |
+| `search` | ✓ | ✓ | ✓ | tavily → parallel → brave |
 | `search-parallel` | ✓ | ✓ | ✓ | per-query, same chain |
 | `extract` | ✓ | ✓ | ✗ | tavily → parallel |
 | `crawl` | ✓ | ✗ | ✗ | tavily only |

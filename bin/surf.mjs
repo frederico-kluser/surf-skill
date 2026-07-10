@@ -26,8 +26,9 @@ const VERSION = '5.1.0';
 
 const HELP = `surf — multi-skill setup & validation
 
-Bundles surf-research-skill (multi-provider web search) and surf-plan-skill
-(research-driven execution planning) into one command.
+Bundles surf-research-skill (multi-provider web search), surf-plan-skill
+(research-driven execution planning), and surf-free-skill (free, keyless web
+search — no API key) into one command.
 
 Commands:
   (no args)              Interactive setup wizard (add keys with live validation)
@@ -42,6 +43,7 @@ Commands:
 Power-user CLIs (also installed):
   surf-research-skill ...         The search engine (search/extract/crawl/map/research)
   surf-plan-skill ...    The planning skill (list/show/new/doctor)
+  surf-free-skill ...    Free keyless search (Wikipedia + DuckDuckGo, no key)
 
 Keys live in:        ${KEYS_FILE} (chmod 600)
 Plans live in:       ~/.claude/plans/<slug>-<timestamp>.md (or ./plans/)
@@ -67,7 +69,7 @@ function fmtBytes(n) {
 
 async function detectSkills() {
   const home = os.homedir();
-  const skillsToCheck = ['surf-research-skill', 'surf-plan-skill'];
+  const skillsToCheck = ['surf-research-skill', 'surf-plan-skill', 'surf-free-skill'];
   const found = {};
   for (const skill of skillsToCheck) {
     found[skill] = { dirs: [] };
@@ -211,10 +213,10 @@ async function cmdDoctor() {
     const status = t.n === 0 ? '⚠ no keys' : t.burned ? `${t.n} key(s), ${t.burned} burned` : `${t.n} key(s) ✓`;
     out(`  ${t.p.padEnd(10)} ${status}`);
   }
-  out(`  ${'keyless'.padEnd(10)} ${[...KEYLESS_PROVIDERS].join(', ')} — free fallback, always on (works with zero keys)`);
+  out(`  ${'free'.padEnd(10)} surf-free-skill — keyless search (${[...KEYLESS_PROVIDERS].join(' + ')}), no key needed`);
   if (totals.every(t => t.n === 0)) {
-    out(`\n  ℹ No paid keys yet — \`search\` still works via the free keyless tier (${[...KEYLESS_PROVIDERS].join(' → ')}).`);
-    out('  → For higher-quality & faster results, run `surf` to add Tavily/Parallel/Brave keys.');
+    out('\n  ⚠ No keys — surf-research-skill needs one. Run `surf` to add Tavily/Parallel/Brave keys.');
+    out('  ℹ For free, no-key search, use `surf-free-skill "your query"` instead.');
     process.exitCode = 2;
   }
 
