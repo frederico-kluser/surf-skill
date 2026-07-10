@@ -1,5 +1,80 @@
 # Changelog
 
+## v5.1.0 — keyless fallback tier + always-deliver hardening
+
+`surf` now works with **zero API keys**. Previously every provider (Tavily,
+Parallel, Brave) required a key, so an agent-driven `search` with nothing
+configured threw `NoProviderAvailable` and exited non-zero — and Brave's free
+tier was discontinued in Feb 2026, leaving no zero-cost path. This release adds
+a free, **keyless bottom tier** (Wikipedia + DuckDuckGo) to the search fallback
+chain and hardens key rotation so a request is "always delivered": try the next
+key, then the next provider, then the free tier.
+
+### Why
+
+The goal is a tool that returns *something* useful before onboarding, then gets
+better as keys are added. Deep research into the keyless landscape (sources
+below) settled the provider choice — and a **live probe corrected the docs**:
+DuckDuckGo's Instant Answer API is *not* a general-web search API (blank for
+most non-entity queries), and Jina's `s.jina.ai`, though widely documented as
+keyless, now returns `401 AuthenticationRequiredError`. The verified,
+reliably-keyless pair is **Wikipedia's MediaWiki search API** (broad
+encyclopedic full-text, returns hits for almost any informational query) plus
+**DuckDuckGo IA** (instant answers / entities) as the final safety net. Bing's
+API is retired (Aug 2025) and Google Custom Search is closed to new customers,
+so neither is an option.
+
+### Added
+
+- **Keyless search tier** (`src/lib/providers/wikipedia.mjs`,
+  `src/lib/providers/ddg.mjs`): two free, no-key providers appended last to the
+  `search` chain (`tavily → parallel → brave → wikipedia → ddg`). Marked
+  `keyless: true` and kept out of `state.mjs`'s provider list, so they never
+  touch `keys.json`, `keys list`, setup, or validation. `search` now **never**
+  throws `NoProviderAvailable`.
+- **Bulk `keys add`** (`src/lib/keys-cmd.mjs`): `keys add --provider X k1 k2 k3`
+  adds many keys of one provider in a single call (validated in parallel), and
+  `--stdin` reads newline-delimited keys (`cat keys.txt | … keys add --stdin`).
+- **Per-key 429 cooldown**: a key that exhausts its rate-limit retries is
+  sidelined for 60s (persisted in `keys.json`, override via
+  `SURF_RATE_LIMIT_COOLDOWN_MS`) so it isn't hammered on the next run. New
+  `cooldowns[]` state field + `setCooldown`/`cooldownActive` helpers
+  (`src/lib/state.mjs`).
+- **Keyless visibility**: `keys list` and `surf doctor` show the always-on
+  `wikipedia, ddg` fallback; `keys list` also flags a `cooling` key.
+
+### Changed
+
+- **Backoff now includes jitter** (`src/lib/dispatch.mjs`): capped exponential
+  backoff + "equal jitter" (half fixed, half random), which sharply reduces
+  synchronized retry storms across many keys/clients (AWS guidance below).
+- Dispatch special-cases keyless providers: exempt from the has-a-usable-key
+  chain filter and the `--provider` pin check, run with an undefined key, and
+  never update `last_ok_provider`/`current` — so the free tier is never promoted
+  ahead of the user's paid providers.
+- Version bumped to 5.1.0 across all pinned locations.
+
+### Sources consulted
+
+- [DuckDuckGo Instant Answer API](https://duckduckgo.com/duckduckgo-help-pages/features/instant-answers-and-other-features) — "not a full search results API … beyond our instant answers"; blank for most non-topic queries.
+- [MediaWiki API:Search](https://www.mediawiki.org/wiki/API:Search) — keyless full-text search; requires a descriptive User-Agent.
+- [Jina Reader/Search](https://jina.ai/reader/) — documents `s.jina.ai`; live probe now returns `401 AuthenticationRequiredError` (key required), so Jina was dropped from the keyless tier.
+- [AWS — Exponential Backoff And Jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/) — jitter "reduced our call count by more than half" under contention.
+- [Brave drops free Search API tier](https://www.implicator.ai/brave-drops-free-search-api-tier-puts-all-developers-on-metered-billing/) (Feb 2026) — why no keyed provider is free anymore.
+- [Bing Search API retirement](https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement) (Aug 2025) and [Google Custom Search JSON](https://developers.google.com/custom-search/v1/overview) (closed to new customers) — ruled out.
+- SearXNG ([API](https://docs.searxng.org/dev/search_api.html), [searx.space](https://searx.space/)) — JSON disabled by default; all public instances probed returned 403/429, so not usable keyless.
+
+### Migration
+
+```bash
+npm i -g surf-skill@latest
+surf-research-skill --version              # 5.1.0
+surf-research-skill search "your query"    # works with NO keys (wikipedia → ddg)
+```
+
+No config changes required. Existing `keys.json` files gain a `cooldowns: []`
+field automatically on next load.
+
 ## v5.0.0 — consolidation: 4 skills → 2, mode routers, provider deep-dive
 
 The 4-skill lineup from v4.2.0 asked the calling agent to pick the right

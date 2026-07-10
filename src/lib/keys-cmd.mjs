@@ -2,7 +2,18 @@
 
 import { loadState, saveStateAtomic, clearBurned, PROVIDERS, KEYS_FILE } from './state.mjs';
 import { maskKey } from './flags.mjs';
-import { validateKey, formatValidation } from '../validators/index.mjs';
+import { validateAll, formatValidation } from '../validators/index.mjs';
+import { KEYLESS_PROVIDERS } from './providers/index.mjs';
+
+// Read newline-delimited keys from stdin (for `keys add --provider X --stdin`
+// or a `-` positional). Returns [] when nothing is piped so we never block.
+async function readStdinKeys() {
+  if (process.stdin.isTTY) return [];
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  return Buffer.concat(chunks).toString('utf8')
+    .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+}
 
 function nextResetIso(burnedAt) {
   const d = new Date(burnedAt);
@@ -25,40 +36,49 @@ function requireProvider(flags, allowAll = false) {
 
 export async function keysAdd(pos, flags) {
   const provider = requireProvider(flags);
-  const key = pos[0];
-  if (!key) throw new Error('Usage: surf-research-skill keys add --provider <name> <key> [--skip-validate]');
+
+  // Collect one OR MANY keys: positionals plus optional stdin (newline-
+  // delimited via --stdin or a `-` positional). Dedupe, preserve order.
+  let inputKeys = pos.filter(k => k && k !== '-').map(k => String(k).trim());
+  if (flags.stdin || pos.includes('-')) {
+    inputKeys.push(...(await readStdinKeys()));
+  }
+  inputKeys = [...new Set(inputKeys.filter(Boolean))];
+
+  if (!inputKeys.length) {
+    throw new Error('Usage: surf-research-skill keys add --provider <name> <key...> [--stdin] [--skip-validate]');
+  }
+
   const state = await loadState();
-  if (state[provider].keys.includes(key)) {
-    return { provider, added: false, reason: 'already exists', state };
+  const existing = new Set(state[provider].keys);
+  const toAdd = inputKeys.filter(k => !existing.has(k));
+  const already = inputKeys.filter(k => existing.has(k));
+
+  // Live-validate the NEW keys in parallel (1 credit each, ~1-3s) before
+  // saving. Opt out with --skip-validate (offline tests / known-good lists).
+  let validations = [];
+  if (!flags['skip-validate'] && toAdd.length) {
+    validations = await validateAll(toAdd.map(key => ({ provider, key })), { parallel: true });
   }
 
-  // Live-validate the key against the provider's API (1 credit, ~1-3s)
-  // before saving. Opt out with --skip-validate (e.g. for offline tests
-  // or when burning through a known-good key list).
-  let validation = null;
-  if (!flags['skip-validate']) {
-    validation = await validateKey(provider, key);
-    if (!validation.valid) {
-      return {
-        provider,
-        added: false,
-        reason: `validation failed: ${formatValidation(validation)}`,
-        validation,
-        state,
-      };
+  const results = [];
+  toAdd.forEach((key, i) => {
+    const validation = validations[i] || null;
+    if (validation && !validation.valid) {
+      results.push({ key, added: false, reason: `validation failed: ${formatValidation(validation)}`, validation });
+      return;
     }
-  }
+    state[provider].keys.push(key);
+    results.push({ key, added: true, index: state[provider].keys.length - 1, validation });
+  });
+  for (const key of already) results.push({ key, added: false, reason: 'already exists' });
 
-  state[provider].keys.push(key);
-  if (state[provider].keys.length === 1) state[provider].current = 0;
-  await saveStateAtomic(state);
-  return {
-    provider,
-    added: true,
-    index: state[provider].keys.length - 1,
-    validation,
-    state,
-  };
+  if (!Number.isInteger(state[provider].current)) state[provider].current = 0;
+
+  const addedCount = results.filter(r => r.added).length;
+  if (addedCount) await saveStateAtomic(state);
+
+  return { provider, addedCount, attempted: inputKeys.length, results, state };
 }
 
 export async function keysRemove(pos, flags) {
@@ -93,6 +113,8 @@ export async function keysList(_pos, flags) {
   for (const p of PROVIDERS) {
     const pp = state[p];
     const burnedIdx = new Set(pp.burned.map(b => b.index));
+    const nowTs = Date.now();
+    const coolingIdx = new Set((pp.cooldowns || []).filter(c => new Date(c.until).getTime() > nowTs).map(c => c.index));
     lines.push(`## ${p} (${pp.keys.length} key${pp.keys.length === 1 ? '' : 's'})`);
     if (!pp.keys.length) {
       lines.push(`_no keys — add with \`surf-research-skill keys add --provider ${p} <key>\`_\n`);
@@ -102,6 +124,7 @@ export async function keysList(_pos, flags) {
       const flags = [];
       if (i === pp.current) flags.push('current');
       if (burnedIdx.has(i)) flags.push('burned');
+      if (coolingIdx.has(i)) flags.push('cooling');
       lines.push(`- [${i}] ${maskKey(k)}${flags.length ? '  *(' + flags.join(', ') + ')*' : ''}`);
     });
     if (pp.burned.length) {
@@ -113,6 +136,8 @@ export async function keysList(_pos, flags) {
     }
     lines.push('');
   }
+  lines.push(`## keyless fallback (always on — works with zero keys)`);
+  lines.push(`- \`${[...KEYLESS_PROVIDERS].join('`, `')}\` — free, no API key; used only when the keyed providers above are absent or exhausted, so \`search\` always returns something`);
   return { text: lines.join('\n') };
 }
 

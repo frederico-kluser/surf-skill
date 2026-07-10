@@ -20,7 +20,7 @@ license: MIT
 argument-hint: "<question, URL, or topic to search / research>"
 allowed-tools: Bash(surf-research-skill:*), Bash(surf:*), Read, Write, Grep, Glob, WebSearch, WebFetch
 metadata:
-  version: "5.0.0"
+  version: "5.1.0"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill + surf-plan-skill); keys via `surf` (interactive, with live validation) or `surf-research-skill setup`; per-project bash timeout via `surf-research-skill project-config`, or --no-budget on no-timeout harnesses (Pi core)"
 ---
 
@@ -108,18 +108,21 @@ gaps remain, tell the user and offer to run a second call.
 
 ## First-time setup
 
-If no keys are configured, point the user at:
+`search` works with **zero keys** — it falls back to a free, keyless tier
+(**Wikipedia** for broad results, **DuckDuckGo** for instant answers), so an
+agent can start immediately. Add keys for higher-quality, general-web results
+(paid providers take precedence automatically). To configure keys:
 
 ```bash
 surf-research-skill setup     # interactive wizard (TTY)
 ```
 
-Or non-interactive:
+Or non-interactive (many keys per provider in one call, each live-validated):
 
 ```bash
-surf-research-skill keys add --provider tavily tvly-...
+surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC
 surf-research-skill keys add --provider parallel <key>
-surf-research-skill keys add --provider brave <key>
+cat brave-keys.txt | surf-research-skill keys add --provider brave --stdin
 ```
 
 Keys live in `~/.config/surf/keys.json` (chmod 600) — never read from env at
@@ -133,13 +136,13 @@ The connector decides which provider to call based on:
 3. Which keys are healthy (`burned` keys are skipped, auto-reset monthly).
 
 Force a specific provider **only for debugging** with
-`--provider tavily|parallel|brave`. That disables fallback — failure means failure.
+`--provider tavily|parallel|brave|wikipedia|ddg`. That disables fallback — failure means failure.
 
 ## Capability table
 
 | Operation | Tavily | Parallel | Brave | Default order |
 |---|---|---|---|---|
-| `search` | ✓ | ✓ | ✓ | tavily → parallel → brave |
+| `search` | ✓ | ✓ | ✓ | tavily → parallel → brave → **wikipedia → ddg** (keyless) |
 | `search-parallel` | ✓ | ✓ | ✓ | per-query, same chain |
 | `extract` | ✓ | ✓ | ✗ | tavily → parallel |
 | `crawl` | ✓ | ✗ | ✗ | tavily only |

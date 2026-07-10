@@ -20,8 +20,9 @@ import path from 'node:path';
 import { loadState, saveStateAtomic, KEYS_FILE, PROVIDERS } from '../src/lib/state.mjs';
 import { validateKey, formatValidation } from '../src/validators/index.mjs';
 import { HARNESS_DIRS } from '../src/lib/harness-install.mjs';
+import { KEYLESS_PROVIDERS } from '../src/lib/providers/index.mjs';
 
-const VERSION = '5.0.0';
+const VERSION = '5.1.0';
 
 const HELP = `surf — multi-skill setup & validation
 
@@ -210,8 +211,10 @@ async function cmdDoctor() {
     const status = t.n === 0 ? '⚠ no keys' : t.burned ? `${t.n} key(s), ${t.burned} burned` : `${t.n} key(s) ✓`;
     out(`  ${t.p.padEnd(10)} ${status}`);
   }
+  out(`  ${'keyless'.padEnd(10)} ${[...KEYLESS_PROVIDERS].join(', ')} — free fallback, always on (works with zero keys)`);
   if (totals.every(t => t.n === 0)) {
-    out('\n  → Run `surf` to add your first key.');
+    out(`\n  ℹ No paid keys yet — \`search\` still works via the free keyless tier (${[...KEYLESS_PROVIDERS].join(' → ')}).`);
+    out('  → For higher-quality & faster results, run `surf` to add Tavily/Parallel/Brave keys.');
     process.exitCode = 2;
   }
 

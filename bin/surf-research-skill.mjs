@@ -3,7 +3,7 @@
 // across Tavily and Parallel AI with automatic key + provider fallback.
 
 import { readFile, writeFile, mkdir, unlink } from 'node:fs/promises';
-import { parseFlags, sleep, clamp } from '../src/lib/flags.mjs';
+import { parseFlags, sleep, clamp, maskKey } from '../src/lib/flags.mjs';
 import { dispatch, DispatchError } from '../src/lib/dispatch.mjs';
 import { mapPool } from '../src/lib/pool.mjs';
 import { formatFor } from '../src/lib/format.mjs';
@@ -16,7 +16,7 @@ import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
 
-const VERSION = '5.0.0';
+const VERSION = '5.1.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -66,7 +66,8 @@ Commands:
   keys <add|remove|list|reset|clear> [...]
 
 Global flags:
-  --provider <tavily|parallel|brave>  Force provider, disables fallback
+  --provider <tavily|parallel|brave|wikipedia|ddg>  Force one provider, disables fallback
+                                   (wikipedia & ddg are the free, keyless search tier)
   --mode <fast|normal|slow>      Search tier (per-provider mapping):
                                    fast   = Tavily depth=fast   / Brave count=5
                                    normal = Tavily depth=basic  / Brave count=10 (default)
@@ -100,9 +101,12 @@ Examples:
   surf-research-skill search-parallel --queries-file q.json --concurrency 8 --no-budget --json
   surf-research-skill extract https://docs.anthropic.com/...
   surf-research-skill research-start "compare X and Y" --model pro --confirm-expensive
-  surf-research-skill keys add --provider tavily tvly-...
+  surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC   # many at once
+  cat keys.txt | surf-research-skill keys add --provider tavily --stdin       # one key per line
   surf-research-skill keys list
 
+Works with ZERO keys: the free, keyless wikipedia + ddg tier answers "search"
+until you add paid keys (then they take precedence automatically).
 Key & state are stored in ~/.config/surf/keys.json (chmod 600).
 Docs: ~/.agents/skills/surf-research-skill/SKILL.md`;
 
@@ -644,18 +648,22 @@ async function cmdKeys(pos, flags) {
     if (flags.json) {
       out(JSON.stringify(result, null, 2));
     } else if (sub === 'add') {
-      if (result.added) {
-        if (result.validation) {
-          out(`✓ validated (${result.validation.latency_ms}ms, ${result.validation.credits} credit${result.validation.credits === 1 ? '' : 's'})`);
+      for (const r of result.results) {
+        if (r.added) {
+          const v = r.validation ? ` (validated, ${r.validation.latency_ms}ms, ${r.validation.credits} credit${r.validation.credits === 1 ? '' : 's'})` : '';
+          out(`✓ added [${r.index}] ${maskKey(r.key)} to ${result.provider}${v}`);
+        } else if (r.reason === 'already exists') {
+          out(`• ${maskKey(r.key)} already exists in ${result.provider} (no-op)`);
+        } else {
+          out(`✗ ${maskKey(r.key)} NOT saved — ${r.reason}`);
         }
-        out(`✓ added [${result.index}] to ${result.provider}`);
-      } else if (result.validation && !result.validation.valid) {
-        const { formatValidation } = await import('../src/validators/index.mjs');
-        out(formatValidation(result.validation));
-        out(`✗ NOT saved (re-run with --skip-validate to add anyway)`);
+      }
+      out(`\n${result.addedCount}/${result.attempted} key(s) added to ${result.provider}.`);
+      // Non-zero exit only when nothing was added AND a real failure occurred
+      // (not merely "already exists"), so `keys add` surfaces errors in scripts.
+      if (result.addedCount === 0 && result.results.some(r => !r.added && r.reason !== 'already exists')) {
+        out(`Re-run with --skip-validate to add unvalidated keys.`);
         process.exitCode = 1;
-      } else {
-        out(`already exists in ${result.provider} (no-op)`);
       }
     } else if (sub === 'remove' || sub === 'rm' || sub === 'delete') {
       out(`✓ removed index ${result.index} from ${result.provider}`);

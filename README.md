@@ -13,12 +13,12 @@
 
 <p align="center">
   Multi-provider web skill for AI coding agents.<br/>
-  Fronts <strong>Tavily</strong> and <strong>Parallel AI</strong> behind a single CLI + Node library, with automatic key rotation, provider fallback, and last-known-good persistence.
+  Fronts <strong>Tavily</strong>, <strong>Parallel AI</strong> and <strong>Brave</strong> behind a single CLI + Node library — with automatic key rotation, provider fallback, last-known-good persistence, and a free <strong>keyless tier</strong> (Wikipedia + DuckDuckGo) so <code>search</code> works with zero keys.
 </p>
 
 ---
 
-**Two skills. Three providers. One install.** `npm i -g surf-skill` bundles
+**Two skills. Three providers + a free keyless tier. One install.** `npm i -g surf-skill` bundles
 **`surf-research-skill`** (multi-provider web research — a single lookup,
 parallel fan-out, or async deep research, auto-routed by query complexity
 and harness) and **`surf-plan-skill`** (research-driven execution planning
@@ -35,7 +35,8 @@ crawl    ──┼──▶ surf-research-skill ──▶ Parallel (search, extr
 map      ──┤      │        │
 research ──┘      │        └─▶ mode router: Normal (1 call) / Parallel (fan-out)
                   │            / Deep (fan-out + async research, iterates on Pi)
-                  └──▶ Brave    (search only — own index)
+                  ├──▶ Brave    (search only — own index)
+                  └──▶ keyless: Wikipedia + DuckDuckGo (free, no key — always-on search fallback)
 
 plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-grounded)
                                        / Deep (+ ambiguity sweep, auto on
@@ -45,7 +46,7 @@ plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-
 
 | | |
 |---|---|
-| **Status** | v5.0.0 (npm) |
+| **Status** | v5.1.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-research-skill` · `surf-plan-skill` (each auto-routes between a fast and a deep mode) |
 | **Bins shipped** | `surf` (interactive setup + validation), `surf-research-skill`, `surf-plan-skill` |
@@ -286,7 +287,7 @@ Full reference: `skills/surf-research-skill/SKILL.md`.
 Global flags every command accepts:
 
 ```
---provider <tavily|parallel|brave>  Force provider (disables fallback)
+--provider <tavily|parallel|brave|wikipedia|ddg>  Force provider (disables fallback; wikipedia/ddg keyless)
 --mode <fast|normal|slow>           Search tier. Per-provider mapping:
                                       fast   = Tavily depth=fast / Brave count=5
                                       normal = default
@@ -414,19 +415,23 @@ surf-research-skill search "x" --provider parallel
 
 ---
 
-## Onboarding (3 ways)
+## Onboarding
+
+`search` works with **zero keys** via the free keyless tier (Wikipedia +
+DuckDuckGo) — add keys any time for higher-quality, general-web results.
 
 ```bash
 # 1. Wizard (recommended in a TTY)
 surf-research-skill setup
 
-# 2. Direct
-surf-research-skill keys add --provider tavily tvly-...
-surf-research-skill keys add --provider parallel <key>
+# 2. Direct — many keys per provider in one call (each live-validated)
+surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC
+cat parallel-keys.txt | surf-research-skill keys add --provider parallel --stdin
 
-# 3. Auto-launch in TTY: just run any command without keys
+# 3. Run any command without keys
 surf-research-skill search "test"
-# → "No keys configured. Launching setup wizard…" → prompts → resumes search
+# → TTY, no keys: launches the setup wizard
+# → non-interactive, no keys: answered by the keyless tier (wikipedia → ddg)
 
 # 4. Library mode: env vars / .env / explicit opts (no setup needed)
 TAVILY_API_KEY=tvly-... node -e "import('surf-skill').then(m => m.search('x'))"
@@ -482,11 +487,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v5.0.0)
+## Repository layout (v5.1.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 5.0.0, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 5.1.0, 3 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE

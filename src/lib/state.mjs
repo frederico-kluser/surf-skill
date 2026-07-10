@@ -20,7 +20,7 @@ export const SCHEMA_VERSION = 1;
 const BURNED_CAP = 50;
 
 function blankProvider() {
-  return { keys: [], current: 0, burned: [] };
+  return { keys: [], current: 0, burned: [], cooldowns: [] };
 }
 
 function blankState() {
@@ -62,10 +62,18 @@ async function releaseLock() {
 
 function normalizeProvider(p) {
   const obj = p && typeof p === 'object' ? p : {};
+  const now = Date.now();
   return {
     keys: Array.isArray(obj.keys) ? obj.keys.filter(k => typeof k === 'string' && k) : [],
     current: Number.isInteger(obj.current) ? obj.current : 0,
     burned: Array.isArray(obj.burned) ? obj.burned.filter(b => b && typeof b === 'object' && Number.isInteger(b.index)) : [],
+    // Transient per-key cooldowns (e.g. after a 429). Expired entries are pruned
+    // here on every load/save so keys.json stays clean; active ones persist so a
+    // rate-limited key isn't hammered first on the next process run.
+    cooldowns: Array.isArray(obj.cooldowns)
+      ? obj.cooldowns.filter(c => c && typeof c === 'object' && Number.isInteger(c.index)
+          && typeof c.until === 'string' && new Date(c.until).getTime() > now)
+      : [],
   };
 }
 
@@ -173,14 +181,38 @@ export function nextUsableKeyIndex(state, provider, skipIndex = -1) {
   const p = state[provider];
   if (!p || !p.keys.length) return -1;
   const burnedIdx = new Set(p.burned.map(b => b.index));
+  const now = Date.now();
   const n = p.keys.length;
   const start = Number.isInteger(p.current) ? Math.max(0, Math.min(p.current, n - 1)) : 0;
   for (let off = 0; off < n; off++) {
     const i = (start + off) % n;
     if (i === skipIndex) continue;
-    if (!burnedIdx.has(i)) return i;
+    if (burnedIdx.has(i)) continue;
+    if (cooldownActive(p, i, now)) continue;
+    return i;
   }
   return -1;
+}
+
+// Temporarily sideline a key without burning it (e.g. after a 429). Persisted so
+// the next process run doesn't immediately re-hit a rate-limited key. Expired
+// entries are pruned in normalizeProvider.
+export function setCooldown(state, provider, index, untilMs) {
+  const p = state[provider];
+  if (!p) return;
+  if (!Array.isArray(p.cooldowns)) p.cooldowns = [];
+  const until = new Date(untilMs).toISOString();
+  const existing = p.cooldowns.find(c => c.index === index);
+  if (existing) existing.until = until;
+  else p.cooldowns.push({ index, until });
+}
+
+export function cooldownActive(providerState, index, now = Date.now()) {
+  if (!providerState || !Array.isArray(providerState.cooldowns)) return false;
+  const c = providerState.cooldowns.find(x => x.index === index);
+  if (!c) return false;
+  const until = new Date(c.until).getTime();
+  return Number.isFinite(until) && until > now;
 }
 
 export function markBurned(state, provider, index, reason) {
