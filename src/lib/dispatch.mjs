@@ -3,17 +3,20 @@
 
 import {
   loadState, saveStateAtomic, markBurned, providerHasUsableKey,
-  nextUsableKeyIndex, PROVIDERS as PROVIDER_NAMES,
+  nextUsableKeyIndex, setCooldown, cooldownActive, PROVIDERS as PROVIDER_NAMES,
 } from './state.mjs';
 import { audit, recordUsage } from './audit.mjs';
 import { cacheKey, cacheGet, cacheSet } from './cache.mjs';
-import { getProvider, capabilityMap, providerFromRequestId } from './providers/index.mjs';
+import { getProvider, capabilityMap, providerFromRequestId, KEYLESS_PROVIDERS } from './providers/index.mjs';
 import { guardExpensive } from './cost.mjs';
 import { sleep } from './flags.mjs';
 import { progress } from './progress.mjs';
 
 const CACHEABLE = new Set(['search', 'extract', 'map']);
-const VERSION = '5.0.0';
+const VERSION = '5.2.0';
+// After a key exhausts its 429 retries, sideline it for this long (persisted)
+// so we stop hammering a rate-limited key now and on the next process run.
+const RATE_LIMIT_COOLDOWN_MS = Number(process.env.SURF_RATE_LIMIT_COOLDOWN_MS) || 60_000;
 
 // Detect the agent harness's bash timeout from env vars. The number is the
 // total time (ms) the harness will allow our process to live before SIGTERM.
@@ -92,19 +95,41 @@ function buildChain(operation, state, flags) {
     return { chain: [provider], pinned: true };
   }
 
+  // Keyless path: the standalone surf-free-skill sets flags.keyless to run a
+  // free, no-API-key search over wikipedia → ddg. It never touches keyed
+  // providers or keys.json, and is the ONLY way keyless providers are reached
+  // (they are not in any capabilityMap chain).
+  if (flags.keyless) {
+    if (operation !== 'search') {
+      throw new DispatchError('KeylessSearchOnly', `keyless mode only supports 'search' (got '${operation}')`);
+    }
+    const kc = [...KEYLESS_PROVIDERS];
+    if (flags.provider) {
+      if (!KEYLESS_PROVIDERS.has(flags.provider)) {
+        throw new DispatchError('NotKeyless', `--provider '${flags.provider}' is not keyless (use: ${kc.join(', ')})`);
+      }
+      return { chain: [flags.provider], pinned: true };
+    }
+    return { chain: kc, pinned: false };
+  }
+
   const baseChain = capabilityMap[operation];
   if (!Array.isArray(baseChain)) {
     throw new DispatchError('UnknownOperation', `operation '${operation}' is not registered`);
   }
 
-  let chain = baseChain.filter(p => providerHasUsableKey(state, p));
+  // Keyless providers (wikipedia/ddg) always survive the filter — they need no key,
+  // so a `search` chain is never empty and NoProviderAvailable can't fire for it.
+  // Keyed providers must still have a usable (non-burned) key.
+  let chain = baseChain.filter(p => KEYLESS_PROVIDERS.has(p) || providerHasUsableKey(state, p));
 
   if (flags.provider) {
     if (!baseChain.includes(flags.provider)) {
       throw new DispatchError('NotCapable',
         `provider '${flags.provider}' does not support '${operation}' (supported: ${baseChain.join(', ')})`);
     }
-    if (!providerHasUsableKey(state, flags.provider)) {
+    // Keyless providers (wikipedia/ddg) can be pinned without a key.
+    if (!KEYLESS_PROVIDERS.has(flags.provider) && !providerHasUsableKey(state, flags.provider)) {
       throw new DispatchError('NoUsableKey', `provider '${flags.provider}' has no usable keys for '${operation}'`);
     }
     return { chain: [flags.provider], pinned: true };
@@ -130,7 +155,12 @@ function buildChain(operation, state, flags) {
 }
 
 function backoff(attempt) {
-  return Math.min(1500 * (attempt + 1) ** 2, 8000);
+  // Capped exponential backoff with "equal jitter": half fixed + half random.
+  // Jitter sharply cuts synchronized retry storms when many keys/clients hit the
+  // same rate-limited provider (AWS: adding jitter "reduced our call count by
+  // more than half"). https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+  const capped = Math.min(1500 * (attempt + 1) ** 2, 8000);
+  return Math.round(capped / 2 + Math.random() * (capped / 2));
 }
 
 export async function dispatch(operation, args, flags = {}, runCtx = {}) {
@@ -184,26 +214,39 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
 
     let attempted = new Set();
     let providerExhausted = false;
+    // Keyless providers (wikipedia/ddg) have no keys / no state slot: run exactly one
+    // synthetic iteration with an undefined ctx.key.
+    const isKeyless = KEYLESS_PROVIDERS.has(providerName);
+    let keylessDone = false;
 
     while (!providerExhausted) {
-      const keyIdx = (() => {
-        const p = state[providerName];
-        if (!p || !p.keys.length) return -1;
-        const burnedIdx = new Set(p.burned.map(b => b.index));
-        const n = p.keys.length;
-        const start = Math.max(0, Math.min(p.current || 0, n - 1));
-        for (let off = 0; off < n; off++) {
-          const i = (start + off) % n;
-          if (attempted.has(i)) continue;
-          if (burnedIdx.has(i)) continue;
-          return i;
-        }
-        return -1;
-      })();
+      let keyIdx;
+      if (isKeyless) {
+        if (keylessDone) { providerExhausted = true; break; }
+        keylessDone = true;
+        keyIdx = -1; // sentinel: no key
+      } else {
+        keyIdx = (() => {
+          const p = state[providerName];
+          if (!p || !p.keys.length) return -1;
+          const burnedIdx = new Set(p.burned.map(b => b.index));
+          const now = Date.now();
+          const n = p.keys.length;
+          const start = Math.max(0, Math.min(p.current || 0, n - 1));
+          for (let off = 0; off < n; off++) {
+            const i = (start + off) % n;
+            if (attempted.has(i)) continue;
+            if (burnedIdx.has(i)) continue;
+            if (cooldownActive(p, i, now)) continue; // skip rate-limited keys
+            return i;
+          }
+          return -1;
+        })();
+        if (keyIdx === -1) { providerExhausted = true; break; }
+        attempted.add(keyIdx);
+      }
 
-      if (keyIdx === -1) { providerExhausted = true; break; }
-      attempted.add(keyIdx);
-      progress.start(`${operation} → ${providerName} (key #${keyIdx})`);
+      progress.start(`${operation} → ${providerName} (${isKeyless ? 'keyless' : 'key #' + keyIdx})`);
 
       // Self-budget check: abort BEFORE the harness SIGTERMs us. Skipped
       // entirely when unlimited (--no-budget / no-limit harness like Pi).
@@ -225,7 +268,7 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
       }
 
       const ctx = {
-        key: state[providerName].keys[keyIdx],
+        key: isKeyless ? undefined : state[providerName].keys[keyIdx],
         // Constrain HTTP timeout to whatever's left in our budget so we don't
         // sit waiting beyond what the harness will allow. When unlimited, pass
         // undefined so the provider uses its own per-request ceiling
@@ -259,7 +302,10 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
           });
 
           if (kind === 'caller_4xx' || kind === 'not_supported') {
-            // Don't retry, don't fallback. Bad input.
+            // Keyed provider + bad input: don't retry or fallback. But a KEYLESS
+            // fallback that 4xxs (e.g. a bad optional env key or an upstream
+            // block) must NOT abort the chain — fall through to the next provider.
+            if (isKeyless) break;
             throw e;
           }
           if (kind === 'rate_limit_429') {
@@ -268,7 +314,13 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
               progress.retry(`${providerName} 429 — backoff ${backoff(attempt)}ms (attempt ${attempt + 1}/3)`);
               await sleep(backoff(attempt)); continue;
             }
-            break; // exhausted retries -> next key
+            // Exhausted 429 retries: sideline this key on a short, persisted
+            // cooldown so we skip it now and next run instead of hammering it.
+            if (!isKeyless) {
+              setCooldown(state, providerName, keyIdx, Date.now() + RATE_LIMIT_COOLDOWN_MS);
+              if (persistState) await saveStateAtomic(state);
+            }
+            break; // -> next key
           }
           if (kind === 'network') {
             consecutiveNetwork++;
@@ -279,17 +331,21 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
             break; // exhausted retries -> next key
           }
           if (kind === 'auth') {
-            progress.warn(`${providerName} key #${keyIdx} burned (${e.statusCode || 'auth'})`);
-            markBurned(state, providerName, keyIdx, String(e.statusCode || 'auth'));
-            if (persistState) await saveStateAtomic(state);
+            if (!isKeyless) {
+              progress.warn(`${providerName} key #${keyIdx} burned (${e.statusCode || 'auth'})`);
+              markBurned(state, providerName, keyIdx, String(e.statusCode || 'auth'));
+              if (persistState) await saveStateAtomic(state);
+            }
             break; // next key
           }
           if (kind === 'server_5xx') {
             consecutive5xx++;
             if (consecutive5xx >= 3) {
-              progress.warn(`${providerName} key #${keyIdx} burned (5xx x3)`);
-              markBurned(state, providerName, keyIdx, '5xx');
-              if (persistState) await saveStateAtomic(state);
+              if (!isKeyless) {
+                progress.warn(`${providerName} key #${keyIdx} burned (5xx x3)`);
+                markBurned(state, providerName, keyIdx, '5xx');
+                if (persistState) await saveStateAtomic(state);
+              }
               break; // next key
             }
             if (attempt < 2) {
@@ -304,13 +360,18 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
       }
 
       if (success) {
-        state.last_ok_provider = providerName;
-        state[providerName].current = keyIdx;
-        if (persistState) await saveStateAtomic(state);
+        // Keyless providers never write state: no key to remember, and we must
+        // NOT set last_ok_provider (that would promote the free tier ahead of the
+        // user's paid providers on the next request).
+        if (!isKeyless) {
+          state.last_ok_provider = providerName;
+          state[providerName].current = keyIdx;
+          if (persistState) await saveStateAtomic(state);
+        }
         await recordUsage({
           op: operation,
           provider: providerName,
-          key_index: keyIdx,
+          key_index: isKeyless ? undefined : keyIdx,
           credits: success.usage && success.usage.credits,
           cached: false,
           latency_ms: success.latency_ms,
@@ -327,7 +388,7 @@ export async function dispatch(operation, args, flags = {}, runCtx = {}) {
       }
 
       // No success on this key; record summary and loop to next key.
-      errors.push(`${providerName}#${keyIdx}: ${consecutive5xx ? '5xx' : consecutive429 ? '429' : consecutiveNetwork ? 'network' : 'auth'}`);
+      errors.push(`${providerName}${isKeyless ? '' : '#' + keyIdx}: ${consecutive5xx ? '5xx' : consecutive429 ? '429' : consecutiveNetwork ? 'network' : 'auth'}`);
     }
 
     if (pinned) break;

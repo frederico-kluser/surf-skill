@@ -13,19 +13,19 @@
 
 <p align="center">
   Multi-provider web skill for AI coding agents.<br/>
-  Fronts <strong>Tavily</strong> and <strong>Parallel AI</strong> behind a single CLI + Node library, with automatic key rotation, provider fallback, and last-known-good persistence.
+  Fronts <strong>Tavily</strong>, <strong>Parallel AI</strong> and <strong>Brave</strong> behind a single CLI + Node library — with automatic key rotation, provider fallback, and last-known-good persistence. Ships a separate free, keyless search skill (<strong>surf-free-skill</strong>: Wikipedia + DuckDuckGo, no API key).
 </p>
 
 ---
 
-**Two skills. Three providers. One install.** `npm i -g surf-skill` bundles
+**Three skills. Three providers. One install.** `npm i -g surf-skill` bundles
 **`surf-research-skill`** (multi-provider web research — a single lookup,
 parallel fan-out, or async deep research, auto-routed by query complexity
-and harness) and **`surf-plan-skill`** (research-driven execution planning
+and harness), **`surf-plan-skill`** (research-driven execution planning
 that auto-routes into a full ambiguity-sweep mode for vague/high-stakes
-work), plus a friendly `surf` setup wrapper with live key validation. Each
-skill decides its own depth — you never have to pick between near-duplicate
-tools.
+work), and **`surf-free-skill`** (free, keyless web search via Wikipedia +
+DuckDuckGo — no API key), plus a friendly `surf` setup wrapper with live key
+validation. Each skill decides its own depth.
 
 ```
                   ┌──▶ Tavily   (search, extract, crawl, map, research)
@@ -37,6 +37,8 @@ research ──┘      │        └─▶ mode router: Normal (1 call) / Para
                   │            / Deep (fan-out + async research, iterates on Pi)
                   └──▶ Brave    (search only — own index)
 
+free search  ──▶ surf-free-skill ──▶ Wikipedia + DuckDuckGo (keyless, no API key)
+
 plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-grounded)
                                        / Deep (+ ambiguity sweep, auto on
                                        vague/high-stakes work or by request)
@@ -45,7 +47,7 @@ plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-
 
 | | |
 |---|---|
-| **Status** | v5.0.0 (npm) |
+| **Status** | v5.2.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-research-skill` · `surf-plan-skill` (each auto-routes between a fast and a deep mode) |
 | **Bins shipped** | `surf` (interactive setup + validation), `surf-research-skill`, `surf-plan-skill` |
@@ -57,7 +59,7 @@ plan / design ──▶ surf-plan-skill ──▶ mode router: Normal (research-
 ## Quickstart (60 seconds)
 
 ```bash
-npm i -g surf-skill          # installs BOTH skills + 3 bins (cross-OS)
+npm i -g surf-skill          # installs all 3 skills + 4 bins (cross-OS)
 surf                         # interactive: add keys with LIVE validation
                              #   ✓ valid (tavily, HTTP 200, 1.2s, 1 credit)
                              #   ✗ invalid (auth, HTTP 401) — NOT saved
@@ -414,19 +416,25 @@ surf-research-skill search "x" --provider parallel
 
 ---
 
-## Onboarding (3 ways)
+## Onboarding
+
+`surf-research-skill` needs an API key. (For free, no-key search, use the
+separate **`surf-free-skill`** — no setup at all.)
 
 ```bash
 # 1. Wizard (recommended in a TTY)
 surf-research-skill setup
 
-# 2. Direct
-surf-research-skill keys add --provider tavily tvly-...
-surf-research-skill keys add --provider parallel <key>
+# 2. Direct — many keys per provider in one call (each live-validated)
+surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC
+cat parallel-keys.txt | surf-research-skill keys add --provider parallel --stdin
 
-# 3. Auto-launch in TTY: just run any command without keys
+# 3. Auto-launch in a TTY: run any command without keys
 surf-research-skill search "test"
-# → "No keys configured. Launching setup wizard…" → prompts → resumes search
+# → in a TTY with no keys: launches the setup wizard
+
+# Free, no-key search (separate skill, zero setup):
+surf-free-skill "your query"
 
 # 4. Library mode: env vars / .env / explicit opts (no setup needed)
 TAVILY_API_KEY=tvly-... node -e "import('surf-skill').then(m => m.search('x'))"
@@ -482,11 +490,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v5.0.0)
+## Repository layout (v5.2.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 5.0.0, 3 bins
+├── package.json                       ← name: surf-skill (npm), version 5.2.0, 4 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE
@@ -516,7 +524,7 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 │   │   ├── project-config.mjs         ← surf-research-skill project-config
 │   │   ├── progress.mjs               ← stderr progress events
 │   │   ├── check-surf-skill.mjs       ← detect companion CLI in PATH
-│   │   ├── harness-install.mjs        ← cross-OS symlink install for 2 skills
+│   │   ├── harness-install.mjs        ← cross-OS symlink install for 3 skills
 │   │   ├── api/                       ← library search/extract/crawl/map/research
 │   │   └── providers/
 │   │       ├── index.mjs              ← capability map (search + 3 providers)

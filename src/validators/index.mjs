@@ -23,7 +23,7 @@ const ADAPTERS = {
   brave: braveProvider,
 };
 
-const VERSION = '5.0.0';
+const VERSION = '5.2.0';
 const VALIDATION_QUERY = 'surf-skill key validation ping';
 const TIMEOUT_MS = 20_000;
 

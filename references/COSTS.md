@@ -61,6 +61,20 @@ credit cost, 2-5x lower latency, optimized for speed over absolute
 freshness. See `references/parallel-api.md` for the full latency/use-case
 table and when to reach for each tier.
 
+## surf-free-skill (wikipedia, ddg) — free, keyless
+
+The separate **`surf-free-skill`** answers `search` with two **free, no-API-key**
+providers (it does NOT share surf-research-skill's paid chain). Both are
+estimated at **0 credits** by `lib/cost.mjs`.
+
+| Provider | Cost | Returns |
+|---|---|---|
+| `wikipedia` (MediaWiki search) | 0 | broad encyclopedic full-text hits + snippets |
+| `ddg` (DuckDuckGo Instant Answer) | 0 | instant answers / entities (blank for most phrases) |
+
+Use `surf-free-skill "query"` for free lookups with zero setup.
+`surf-research-skill` itself requires a key (Tavily / Parallel / Brave).
+
 ## Rules of thumb
 
 - **Default to `--depth basic` and `--max 5`.** Escalating to `advanced`

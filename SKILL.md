@@ -20,7 +20,7 @@ license: MIT
 argument-hint: "<question, URL, or topic to search / research>"
 allowed-tools: Bash(surf-research-skill:*), Bash(surf:*), Read, Write, Grep, Glob, WebSearch, WebFetch
 metadata:
-  version: "5.0.0"
+  version: "5.2.0"
   requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill + surf-plan-skill); keys via `surf` (interactive, with live validation) or `surf-research-skill setup`; per-project bash timeout via `surf-research-skill project-config`, or --no-budget on no-timeout harnesses (Pi core)"
 ---
 
@@ -108,19 +108,22 @@ gaps remain, tell the user and offer to run a second call.
 
 ## First-time setup
 
-If no keys are configured, point the user at:
+`search` requires an API key. If none are configured, point the user at:
 
 ```bash
 surf-research-skill setup     # interactive wizard (TTY)
 ```
 
-Or non-interactive:
+Or non-interactive (many keys per provider in one call, each live-validated):
 
 ```bash
-surf-research-skill keys add --provider tavily tvly-...
+surf-research-skill keys add --provider tavily tvly-AAA tvly-BBB tvly-CCC
 surf-research-skill keys add --provider parallel <key>
-surf-research-skill keys add --provider brave <key>
+cat brave-keys.txt | surf-research-skill keys add --provider brave --stdin
 ```
+
+> No keys and just need a quick free lookup? Use the separate **`surf-free-skill`**
+> (keyless Wikipedia + DuckDuckGo) instead.
 
 Keys live in `~/.config/surf/keys.json` (chmod 600) — never read from env at
 runtime.
