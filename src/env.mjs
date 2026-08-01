@@ -3,13 +3,24 @@
 //   1. Explicit opts (opts.tavilyKey / opts.tavilyKeys / parallel* / brave*)
 //   2. process.env  (TAVILY_API_KEYS comma-separated + TAVILY_API_KEY,
 //                    PARALLEL_API_KEYS + PARALLEL_API_KEY,
-//                    BRAVE_API_KEYS + BRAVE_API_KEY)
+//                    BRAVE_API_KEYS + BRAVE_API_KEY,
+//                    OPENROUTER_API_KEYS + OPENROUTER_API_KEY)
 //   3. .env file at process.cwd() (lightweight regex parser, no dotenv dep)
 //   4. ~/.config/surf/keys.json (CLI persistent store, fallback only)
 
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
-import { loadState } from './lib/state.mjs';
+import { loadState, PROVIDERS } from './lib/state.mjs';
+
+// provider name -> env-var prefix. Kept explicit (rather than uppercasing the
+// provider name) so a future provider whose slug differs from its env prefix
+// doesn't silently break key discovery.
+const ENV_BASE = {
+  tavily: 'TAVILY',
+  parallel: 'PARALLEL',
+  brave: 'BRAVE',
+  openrouter: 'OPENROUTER',
+};
 
 const ENV_FILE_CACHE = new Map();
 
@@ -42,73 +53,68 @@ function arrayify(v) {
 }
 
 function readFromObject(obj, base) {
-  // base = 'TAVILY' | 'PARALLEL' | 'BRAVE'
+  // base = 'TAVILY' | 'PARALLEL' | 'BRAVE' | 'OPENROUTER'
   return [
     ...splitCsv(obj[`${base}_API_KEYS`]),
     obj[`${base}_API_KEY`],
   ].filter(Boolean);
 }
 
+// opts.tavilyKey / opts.tavilyKeys — camelCase option names per provider.
+function explicitFor(opts, provider) {
+  return [...arrayify(opts[`${provider}Key`]), ...arrayify(opts[`${provider}Keys`])];
+}
+
 /**
- * Resolve API keys for all 3 providers using the discovery hierarchy.
+ * Resolve API keys for every provider using the discovery hierarchy.
  *
  * @param {object} opts
  * @param {string|string[]} [opts.tavilyKey|opts.tavilyKeys]
  * @param {string|string[]} [opts.parallelKey|opts.parallelKeys]
  * @param {string|string[]} [opts.braveKey|opts.braveKeys]
+ * @param {string|string[]} [opts.openrouterKey|opts.openrouterKeys]
  * @param {boolean} [opts.skipDotenv=false]
  * @param {boolean} [opts.skipConfigFile=false]
  * @param {string} [opts.cwd=process.cwd()]
- * @returns {Promise<{tavily: string[], parallel: string[], brave: string[]}>}
+ * @returns {Promise<{tavily: string[], parallel: string[], brave: string[], openrouter: string[]}>}
  */
 export async function discoverKeys(opts = {}) {
   const cwd = opts.cwd || process.cwd();
 
-  // Level 1: explicit
-  const explicit = {
-    tavily:   [...arrayify(opts.tavilyKey),   ...arrayify(opts.tavilyKeys)],
-    parallel: [...arrayify(opts.parallelKey), ...arrayify(opts.parallelKeys)],
-    brave:    [...arrayify(opts.braveKey),    ...arrayify(opts.braveKeys)],
-  };
+  const explicit = {};
+  const env = {};
+  const dotenv = {};
+  const cfg = {};
 
-  // Level 2: process.env
-  const env = {
-    tavily:   readFromObject(process.env, 'TAVILY'),
-    parallel: readFromObject(process.env, 'PARALLEL'),
-    brave:    readFromObject(process.env, 'BRAVE'),
-  };
+  const parsedDotenv = opts.skipDotenv ? {} : await loadDotenv(cwd);
 
-  // Level 3: .env file
-  let dotenv = { tavily: [], parallel: [], brave: [] };
-  if (!opts.skipDotenv) {
-    const parsed = await loadDotenv(cwd);
-    dotenv = {
-      tavily:   readFromObject(parsed, 'TAVILY'),
-      parallel: readFromObject(parsed, 'PARALLEL'),
-      brave:    readFromObject(parsed, 'BRAVE'),
-    };
+  for (const p of PROVIDERS) {
+    const base = ENV_BASE[p] || p.toUpperCase();
+    explicit[p] = explicitFor(opts, p);                        // Level 1
+    env[p] = readFromObject(process.env, base);                // Level 2
+    dotenv[p] = opts.skipDotenv ? [] : readFromObject(parsedDotenv, base); // Level 3
+    cfg[p] = [];
   }
 
-  // Level 4: ~/.config/surf/keys.json (per-provider, only if 1-3 are empty
-  // for that provider)
-  const cfg = { tavily: [], parallel: [], brave: [] };
+  // Level 4: ~/.config/surf/keys.json — consulted per provider, and only when
+  // levels 1-3 produced nothing for that provider.
   if (!opts.skipConfigFile) {
     const needCfg = (p) => !explicit[p].length && !env[p].length && !dotenv[p].length;
-    if (needCfg('tavily') || needCfg('parallel') || needCfg('brave')) {
+    if (PROVIDERS.some(needCfg)) {
       try {
         const state = await loadState();
-        if (needCfg('tavily'))   cfg.tavily   = state.tavily.keys   || [];
-        if (needCfg('parallel')) cfg.parallel = state.parallel.keys || [];
-        if (needCfg('brave'))    cfg.brave    = state.brave.keys    || [];
+        for (const p of PROVIDERS) {
+          if (needCfg(p)) cfg[p] = (state[p] && state[p].keys) || [];
+        }
       } catch {}
     }
   }
 
-  return {
-    tavily:   [...new Set([...explicit.tavily,   ...env.tavily,   ...dotenv.tavily,   ...cfg.tavily])],
-    parallel: [...new Set([...explicit.parallel, ...env.parallel, ...dotenv.parallel, ...cfg.parallel])],
-    brave:    [...new Set([...explicit.brave,    ...env.brave,    ...dotenv.brave,    ...cfg.brave])],
-  };
+  const out = {};
+  for (const p of PROVIDERS) {
+    out[p] = [...new Set([...explicit[p], ...env[p], ...dotenv[p], ...cfg[p]])];
+  }
+  return out;
 }
 
 /**
@@ -116,13 +122,10 @@ export async function discoverKeys(opts = {}) {
  * without touching ~/.config/surf/keys.json.
  */
 export async function buildInMemoryState(opts = {}) {
-  const { tavily, parallel, brave } = await discoverKeys(opts);
-  return {
-    schema_version: 1,
-    tavily:   { keys: tavily,   current: 0, burned: [] },
-    parallel: { keys: parallel, current: 0, burned: [] },
-    brave:    { keys: brave,    current: 0, burned: [] },
-    last_ok_provider: null,
-    _inMemory: true,
-  };
+  const discovered = await discoverKeys(opts);
+  const state = { schema_version: 1, last_ok_provider: null, _inMemory: true };
+  for (const p of PROVIDERS) {
+    state[p] = { keys: discovered[p] || [], current: 0, burned: [], cooldowns: [] };
+  }
+  return state;
 }

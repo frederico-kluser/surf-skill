@@ -10,6 +10,7 @@
 import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { PROVIDERS } from './state.mjs';
 
 const home = os.homedir();
 
@@ -167,13 +168,11 @@ export async function ensureKeysSkeleton() {
   await fs.mkdir(cfgDir, { recursive: true });
   const file = path.join(cfgDir, 'keys.json');
   if (!existsSync(file)) {
-    const skeleton = {
-      schema_version: 1,
-      tavily: { keys: [], current: 0, burned: [] },
-      parallel: { keys: [], current: 0, burned: [] },
-      brave: { keys: [], current: 0, burned: [] },
-      last_ok_provider: null,
-    };
+    const skeleton = { schema_version: 1, last_ok_provider: null };
+    // openrouter is included: it holds the LLM key that powers surf-ai.
+    for (const p of PROVIDERS) {
+      skeleton[p] = { keys: [], current: 0, burned: [], cooldowns: [] };
+    }
     await fs.writeFile(file, JSON.stringify(skeleton, null, 2) + '\n');
     if (process.platform !== 'win32') {
       try { await fs.chmod(file, 0o600); } catch {}

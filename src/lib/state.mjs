@@ -14,7 +14,16 @@ export const LOCK_FILE = join(CONFIG_DIR, '.keys.lock');
 export const CACHE_DIR = join(homedir(), '.cache', 'surf');
 export const LEGACY_CACHE_DIR = join(homedir(), '.cache', 'tavily-skill');
 
-export const PROVIDERS = ['tavily', 'parallel', 'brave'];
+// Every provider that owns API keys in keys.json. `openrouter` is NOT a search
+// provider — it is the LLM used by surf-ai orchestration (planning, gap
+// analysis, synthesis). It lives here so it inherits the whole key machinery
+// for free: multi-key rotation, burn-on-auth-failure, monthly un-burn, and
+// 429 cooldowns. It is deliberately absent from every `capabilityMap` chain,
+// so a search dispatch can never route to it.
+export const PROVIDERS = ['tavily', 'parallel', 'brave', 'openrouter'];
+// Providers that answer web searches. Used where "a provider" means "something
+// that can return search results" (setup wizard totals, doctor output).
+export const SEARCH_PROVIDERS = ['tavily', 'parallel', 'brave'];
 export const SCHEMA_VERSION = 1;
 
 const BURNED_CAP = 50;

@@ -1,5 +1,18 @@
 // Generic helpers: flag parsing, string ops, key masking.
 
+// Flags that NEVER take a value. Without this list, `--json "my question"`
+// would set flags.json = "my question" and swallow the positional argument —
+// the question then looks missing. Only unambiguous switches belong here;
+// dual-use flags (--answer, --raw, which accept either `true` or a format
+// string) are deliberately left out so their existing behavior is untouched.
+const BOOLEAN_FLAGS = new Set([
+  'help', 'version',
+  'json', 'raw-json', 'quiet', 'ledger',
+  'no-cache', 'no-fallback', 'no-budget',
+  'confirm-expensive', 'skip-validate',
+  'yes', 'all', 'stdin', 'reset',
+]);
+
 export function parseFlags(argv) {
   const pos = [];
   const flags = {};
@@ -7,6 +20,7 @@ export function parseFlags(argv) {
     const a = argv[i];
     if (a.startsWith('--')) {
       const k = a.slice(2);
+      if (BOOLEAN_FLAGS.has(k)) { flags[k] = true; continue; }
       const next = argv[i + 1];
       if (!next || next.startsWith('--')) flags[k] = true;
       else { flags[k] = next; i++; }

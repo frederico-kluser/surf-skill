@@ -17,21 +17,24 @@ import { existsSync, promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { loadState, saveStateAtomic, KEYS_FILE, PROVIDERS } from '../src/lib/state.mjs';
+import { loadState, saveStateAtomic, KEYS_FILE, PROVIDERS, SEARCH_PROVIDERS } from '../src/lib/state.mjs';
 import { validateKey, formatValidation } from '../src/validators/index.mjs';
 import { HARNESS_DIRS } from '../src/lib/harness-install.mjs';
 import { KEYLESS_PROVIDERS } from '../src/lib/providers/index.mjs';
+import { runAiSetup } from '../src/lib/ai/setup.mjs';
+import { keysFromEnv, PRIMARY_MODEL } from '../src/lib/ai/openrouter.mjs';
 
-const VERSION = '5.2.0';
+const VERSION = '5.4.0';
 
 const HELP = `surf — multi-skill setup & validation
 
-Bundles surf-research-skill (multi-provider web search), surf-plan-skill
-(research-driven execution planning), and surf-free-skill (free, keyless web
-search — no API key) into one command.
+Bundles surf-research-skill (multi-provider web search + the surf-ai autonomous
+research loop), surf-plan-skill (research-driven execution planning), and
+surf-free-skill (free, keyless web search — no API key) into one command.
 
 Commands:
   (no args)              Interactive setup wizard (add keys with live validation)
+  ai-key                 Add the OpenRouter key that powers surf-ai
   add                    Add a key (you'll be asked for provider + key)
   list                   List configured keys (masked) + last-known state
   validate [provider]    Re-validate all keys (or just one provider's)
@@ -41,9 +44,16 @@ Commands:
   --version, -v          Show version
 
 Power-user CLIs (also installed):
-  surf-research-skill ...         The search engine (search/extract/crawl/map/research)
+  surf-search-normal ... surf-ai, ONE round (fits the agent's bash timeout)
+  surf-search-unlimit ...surf-ai, as many rounds as the question needs
+  surf-research-skill ...The search engine (search/extract/crawl/map/research)
   surf-plan-skill ...    The planning skill (list/show/new/doctor)
   surf-free-skill ...    Free keyless search (Wikipedia + DuckDuckGo, no key)
+
+Providers:
+  tavily · parallel · brave   web search (surf-ai fans out across these)
+  openrouter                  the LLM surf-ai plans + synthesizes with
+                              (default model: ${PRIMARY_MODEL})
 
 Keys live in:        ${KEYS_FILE} (chmod 600)
 Plans live in:       ~/.claude/plans/<slug>-<timestamp>.md (or ./plans/)
@@ -211,12 +221,31 @@ async function cmdDoctor() {
   const totals = PROVIDERS.map(p => ({ p, n: state[p].keys.length, burned: state[p].burned.length }));
   for (const t of totals) {
     const status = t.n === 0 ? '⚠ no keys' : t.burned ? `${t.n} key(s), ${t.burned} burned` : `${t.n} key(s) ✓`;
-    out(`  ${t.p.padEnd(10)} ${status}`);
+    const note = t.p === 'openrouter' ? '   (surf-ai LLM)' : '';
+    out(`  ${t.p.padEnd(10)} ${status}${note}`);
   }
   out(`  ${'free'.padEnd(10)} surf-free-skill — keyless search (${[...KEYLESS_PROVIDERS].join(' + ')}), no key needed`);
-  if (totals.every(t => t.n === 0)) {
-    out('\n  ⚠ No keys — surf-research-skill needs one. Run `surf` to add Tavily/Parallel/Brave keys.');
-    out('  ℹ For free, no-key search, use `surf-free-skill "your query"` instead.');
+
+  out('\n## surf-ai');
+  const envOr = keysFromEnv();
+  const orTotal = state.openrouter.keys.length + envOr.length;
+  if (orTotal) {
+    out(`  ✓ ready — ${state.openrouter.keys.length} stored key(s)` +
+        (envOr.length ? ` + ${envOr.length} from OPENROUTER_API_KEY(S)` : ''));
+    out(`    default model: ${PRIMARY_MODEL}`);
+    out('    surf-search-normal "question" --task … --goal … --insights …');
+    out('    surf-search-unlimit "question" --max-rounds 6');
+  } else {
+    out('  ⚠ no OpenRouter key — surf-ai will fall back to its deterministic,');
+    out('    LLM-free path (real searches, no synthesis). Turn it on with:');
+    out('      surf ai-key            (or: surf-research-skill ai-setup)');
+  }
+
+  const searchTotals = totals.filter(t => SEARCH_PROVIDERS.includes(t.p));
+  if (searchTotals.every(t => t.n === 0)) {
+    out('\n  ⚠ No search keys — surf-research-skill needs one. Run `surf` to add Tavily/Parallel/Brave keys.');
+    out('  ℹ surf-ai still runs: it drops to the keyless tier. For a plain free lookup,');
+    out('    use `surf-free-skill "your query"`.');
     process.exitCode = 2;
   }
 
@@ -251,22 +280,25 @@ async function interactiveMenu() {
   try {
     while (true) {
       out('What do you want to do?');
-      out('  [1] Add a key (with live validation)');
-      out('  [2] List + revalidate all keys');
-      out('  [3] Remove a key');
-      out('  [4] Diagnostics (skills + symlinks + dirs)');
+      out('  [1] Add a search key (tavily / parallel / brave, live-validated)');
+      out('  [2] Add the OpenRouter key that powers surf-ai');
+      out('  [3] List + revalidate all keys');
+      out('  [4] Remove a key');
+      out('  [5] Diagnostics (skills + symlinks + dirs)');
       out('  [q] Quit');
       const choice = (await rl.question('> ')).trim().toLowerCase();
       out('');
       if (choice === '1' || choice === 'add') {
         await cmdAdd(rl);
-      } else if (choice === '2' || choice === 'list') {
+      } else if (choice === '2' || choice === 'ai' || choice === 'ai-key') {
+        await runAiSetup();
+      } else if (choice === '3' || choice === 'list') {
         await cmdValidate();
-      } else if (choice === '3' || choice === 'remove') {
+      } else if (choice === '4' || choice === 'remove') {
         const provider = (await rl.question(`Provider [${PROVIDERS.join('/')}]: `)).trim();
         const idx = (await rl.question('Index: ')).trim();
         await cmdRemove([provider, idx]).catch(e => err(`✗ ${e.message}`));
-      } else if (choice === '4' || choice === 'doctor') {
+      } else if (choice === '5' || choice === 'doctor') {
         await cmdDoctor();
       } else if (choice === 'q' || choice === 'quit' || choice === 'exit' || !choice) {
         out('bye 🌊');
@@ -301,6 +333,8 @@ try {
       process.exit(1);
     }
     await cmdAdd();
+  } else if (cmd === 'ai-key' || cmd === 'ai-setup') {
+    await runAiSetup({ key: rest[0] });
   } else if (cmd === 'list') {
     await cmdList();
   } else if (cmd === 'validate') {

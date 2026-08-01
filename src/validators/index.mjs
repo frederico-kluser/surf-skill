@@ -16,6 +16,7 @@
 import { tavilyProvider } from '../lib/providers/tavily.mjs';
 import { parallelProvider } from '../lib/providers/parallel.mjs';
 import { braveProvider } from '../lib/providers/brave.mjs';
+import { validateOpenRouterKey } from '../lib/ai/openrouter.mjs';
 
 const ADAPTERS = {
   tavily: tavilyProvider,
@@ -23,7 +24,7 @@ const ADAPTERS = {
   brave: braveProvider,
 };
 
-const VERSION = '5.2.0';
+const VERSION = '5.4.0';
 const VALIDATION_QUERY = 'surf-skill key validation ping';
 const TIMEOUT_MS = 20_000;
 
@@ -43,13 +44,20 @@ const TIMEOUT_MS = 20_000;
  * }>}
  */
 export async function validateKey(provider, key) {
+  // OpenRouter is an LLM provider, not a search provider: it validates via a
+  // free key-introspection call (GET /api/v1/key), so adding a key costs $0
+  // and burns no tokens.
+  if (provider === 'openrouter') {
+    return validateOpenRouterKey(key, { timeoutMs: TIMEOUT_MS });
+  }
+
   const adapter = ADAPTERS[provider];
   if (!adapter) {
     return {
       valid: false,
       provider,
       kind: 'unknown_provider',
-      error: `unknown provider: ${provider}. Use: tavily | parallel | brave`,
+      error: `unknown provider: ${provider}. Use: tavily | parallel | brave | openrouter`,
     };
   }
   if (!key || typeof key !== 'string' || key.length < 8) {
@@ -110,6 +118,14 @@ export async function validateAll(items, opts = {}) {
  * @returns {string}
  */
 export function formatValidation(r) {
+  if (r.valid && r.provider === 'openrouter') {
+    const bits = [`HTTP 200`, `${r.latency_ms}ms`, 'free check'];
+    if (r.label) bits.push(String(r.label));
+    if (r.usage != null) bits.push(`used $${Number(r.usage).toFixed(4)}`);
+    if (r.limit != null) bits.push(`limit $${Number(r.limit).toFixed(2)}`);
+    else if (r.limit === null) bits.push('no credit limit');
+    return `✓ valid (openrouter, ${bits.join(', ')})`;
+  }
   if (r.valid) {
     return `✓ valid (${r.provider}, HTTP 200, ${r.latency_ms}ms, ${r.credits} credit${r.credits === 1 ? '' : 's'})`;
   }

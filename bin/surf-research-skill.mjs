@@ -15,8 +15,10 @@ import { runSetup } from '../src/lib/setup.mjs';
 import { runProjectConfig, formatProjectConfigResult } from '../src/lib/project-config.mjs';
 import { providerFromRequestId } from '../src/lib/providers/index.mjs';
 import { progress, setSilent } from '../src/lib/progress.mjs';
+import { runAiCommand } from '../src/lib/ai/cli.mjs';
+import { runAiSetup } from '../src/lib/ai/setup.mjs';
 
-const VERSION = '5.2.0';
+const VERSION = '5.4.0';
 
 // Catch SIGTERM/SIGINT so a harness-driven kill surfaces a useful message
 // instead of dying silently. This is defense-in-depth: dispatch already
@@ -33,6 +35,30 @@ for (const sig of ['SIGTERM', 'SIGINT']) {
 }
 
 const HELP = `surf-research-skill — multi-provider web skill (Tavily + Parallel AI)
+
+surf-ai (autonomous research — the CLI runs the whole loop):
+  surf-search-normal <question>    ONE round: LLM plans the queries → they all
+                                   run in parallel → LLM writes the answer.
+                                   Fitted inside the agent's bash timeout.
+  surf-search-unlimit <question>   As many rounds as the question needs: after
+                                   each round the LLM lists what is still open
+                                   and launches the next wave. No self-deadline.
+  ai <question> --mode normal|unlimit      (same thing, explicit mode)
+  ai-setup [--key sk-or-v1-...]    Store the OpenRouter key surf-ai needs.
+
+  Brief flags (give the model your actual situation — this is what makes the
+  answer usable instead of generic):
+    --task "<what you are building/doing right now>"
+    --goal "<what you need out of this research>"
+    --insights "<what you already believe — it gets verified, not assumed>"
+    --deliverable "<the exact shape of answer you want back>"
+    --brief-file <f.json>   {"question","task","goal","insights","deliverable"}
+    --ai-model <slug>       override the LLM (default deepseek/deepseek-v4-pro)
+    --max-rounds N          unlimit only (default 6, hard cap 50)
+    --max-queries N         queries per round (normal 6, unlimit 10)
+    --concurrency N         parallel searches (normal 6, unlimit 8)
+    --ledger                append the per-query coverage table
+    --out <file>            also write the answer to a file
 
 Commands:
   setup                       Interactive onboarding wizard (TTY required)
@@ -93,6 +119,12 @@ Progress logs (stderr):
   Format is stable for agent parsing. Use --quiet or SURF_QUIET=1 to silence.
 
 Examples:
+  surf-research-skill ai-setup
+  surf-search-normal "does OpenRouter support strict json_schema output?" \\
+    --task "adding structured LLM calls to a CLI" \\
+    --goal "know which request fields to send and what breaks" \\
+    --insights "I think response_format.json_schema.strict works on DeepSeek"
+  surf-search-unlimit "best way to cap concurrency in Node without deps" --max-rounds 4
   surf-research-skill setup
   surf-research-skill search "claude 4.7 release notes" --max 3
   surf-research-skill search "topic A" "topic B" "topic C"      # batch (3 queries)
@@ -585,6 +617,15 @@ async function persistResearchHandle(envelope) {
   } catch {}
 }
 
+// --- surf-ai (autonomous research loop) ---
+// Implementation lives in src/lib/ai/cli.mjs so the two standalone bins
+// (surf-search-normal / surf-search-unlimit) share it byte for byte.
+
+async function cmdAi(pos, flags, forcedMode) {
+  const code = await runAiCommand({ pos, flags, mode: forcedMode });
+  if (code) process.exitCode = code;
+}
+
 async function cmdUsage(_pos, flags) {
   if (!flags.provider) die(`Usage: surf-research-skill usage --provider <tavily|parallel>`);
   emitResult(await dispatch('usage', {}, flags), flags);
@@ -701,16 +742,19 @@ if (flags.quiet) setSilent(true);
 // Auto-launch setup wizard on first TTY use when no keys are configured.
 // Commands that don't need keys (setup, keys, project-config, help, etc.)
 // are excluded.
+// surf-ai commands are excluded too: they degrade to the keyless tier on their
+// own, so hijacking the run with a wizard would be wrong.
 const NO_KEYS_NEEDED = new Set([
   'setup', 'keys', 'project-config',
   'cache-clear', 'cost',
+  'ai', 'ai-setup', 'surf-search-normal', 'surf-search-unlimit',
   '--help', '-h', '--version', '-v',
 ]);
 if (!NO_KEYS_NEEDED.has(cmd) && process.stdin.isTTY) {
   try {
-    const { loadState } = await import('../src/lib/state.mjs');
+    const { loadState, SEARCH_PROVIDERS } = await import('../src/lib/state.mjs');
     const state = await loadState();
-    const hasAny = (state.tavily.keys || []).length || (state.parallel.keys || []).length;
+    const hasAny = SEARCH_PROVIDERS.some(p => ((state[p] && state[p].keys) || []).length);
     if (!hasAny) {
       process.stderr.write('No keys configured. Launching setup wizard…\n\n');
       await runSetup();
@@ -724,6 +768,13 @@ if (!NO_KEYS_NEEDED.has(cmd) && process.stdin.isTTY) {
 
 try {
   switch (cmd) {
+    // surf-ai — the CLI owns the whole research loop.
+    case 'ai': await cmdAi(pos, flags); break;
+    case 'surf-search-normal': await cmdAi(pos, flags, 'normal'); break;
+    case 'surf-search-unlimit':
+    case 'surf-search-unlimited': await cmdAi(pos, flags, 'unlimit'); break;
+    case 'ai-setup': await runAiSetup(flags); break;
+
     case 'search': await cmdSearch(pos, flags); break;
     case 'search-parallel': await cmdSearchParallel(pos, flags); break;
     case 'extract': await cmdExtract(pos, flags); break;
@@ -752,6 +803,10 @@ try {
       process.stderr.write(`→ Run 'surf-research-skill setup' to configure keys interactively.\n`);
     }
     process.exit(1);
+  }
+  if (e.code === 'AI_CLI_USAGE') {
+    process.stderr.write(`❌ Error: ${e.message}\n`);
+    process.exit(2);
   }
   if (e.code === 'PROJECT_CONFIG_NO_TTY' || e.code === 'PROJECT_CONFIG_BAD_HARNESS') {
     process.stderr.write(`❌ Error: ${e.message}\n`);

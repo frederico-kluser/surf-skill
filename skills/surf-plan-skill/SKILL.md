@@ -4,7 +4,7 @@ description: >-
   Generates a research-grounded execution plan for a coding task. MUST BE USED
   whenever the user asks for a plan, design, architecture, or spec — including
   in plan/approval mode, BEFORE any plan is presented for approval. Reads the
-  project, runs MANDATORY web research (surf-research-skill CLI via Bash;
+  project, runs MANDATORY web research (surf-search-normal / surf-ai via Bash;
   falls back to WebSearch/WebFetch when Bash is blocked), interviews the user
   with research-backed options, and only then delivers a plan with cited
   sources and a research ledger. For vague, high-stakes, or hard-to-reverse
@@ -19,10 +19,10 @@ description: >-
   architectural decision).
 license: MIT
 argument-hint: "[task to plan, e.g. 'add rate limiting to the Express API']"
-allowed-tools: Bash(surf-research-skill:*), Bash(surf-plan-skill:*), Read, Glob, Grep, Write, Edit, WebSearch, WebFetch, AskUserQuestion
+allowed-tools: Bash(surf-search-normal:*), Bash(surf-search-unlimit:*), Bash(surf-research-skill:*), Bash(surf-plan-skill:*), Read, Glob, Grep, Write, Edit, WebSearch, WebFetch, AskUserQuestion
 metadata:
-  version: "5.2.0"
-  requires: "node>=18; surf-research-skill in PATH (npm i -g surf-skill) for Layer A research; harness WebSearch/WebFetch as Layer B fallback; plan dir at ~/.claude/plans/ (or ./plans/ if it exists in the project)"
+  version: "5.4.0"
+  requires: "node>=18; surf-search-normal + surf-research-skill in PATH (npm i -g surf-skill) for Layer A research; an OpenRouter key (surf-research-skill ai-setup) for surf-ai synthesis — without it Layer A degrades to raw hits; harness WebSearch/WebFetch as Layer B fallback; plan dir at ~/.claude/plans/ (or ./plans/ if it exists in the project)"
 ---
 
 # surf-plan — research-grounded execution planning, two depths
@@ -80,9 +80,25 @@ locks open (in plan-approval mode, after the user's approval).
 The skill has three research layers. Use the FIRST one that works;
 **a blocked layer is an instruction to fall back, never to skip.**
 
-- **Layer A — `surf-research-skill` CLI via Bash (preferred).**
-  Multi-provider (Tavily + Parallel + Brave), key rotation, batching,
-  parallel fan-out, citations. Everything below shows Layer A commands.
+- **Layer A — `surf-search-normal` (surf-ai) via Bash (preferred).**
+  You brief it; the CLI plans the queries, fans them out concurrently across
+  Tavily + Parallel + Brave with key rotation, and returns a cited synthesis.
+  One call per research batch. This is the layer to reach for by default:
+
+  ```bash
+  surf-search-normal "<the question this batch must answer>" \
+    --task "planning: <one line about the feature being planned>" \
+    --goal "<the plan decision this research feeds>" \
+    --insights "<what the codebase read suggests — gets verified>" \
+    --deliverable "<the shape you need, e.g. 'a 3-option table with trade-offs'>"
+  ```
+
+  For a genuinely open-ended unknown on a harness with no bash timeout (or a
+  Bash call you gave a long timeout), use `surf-search-unlimit` instead.
+- **Layer A-manual — raw `surf-research-skill` commands.**
+  Use when you need something surf-ai doesn't do: `extract` a specific URL you
+  already have, `map`/`crawl` a doc site, or run Parallel's async Task API.
+  Also the right layer when you want the raw hits with no synthesis.
 - **Layer B — harness-native `WebSearch` / `WebFetch` tools.**
   Use when Bash is unavailable, denied, or blocked by the current mode
   (plan/approval modes commonly block Bash but allow WebSearch — that is NOT
@@ -94,6 +110,40 @@ The skill has three research layers. Use the FIRST one that works;
 Record the active layer in the ledger. If a Layer A call fails mid-flow (key
 burned, timeout, permission denied), switch to Layer B for the remaining
 calls — do not abandon research.
+
+## Delegated research (subagent/swarm)
+
+When the harness exposes a **subagent tool** (`Agent`, `Task`, `AgentSwarm`,
+or equivalent), the research in **Phases 3/4D/6** (and the per-question
+searches in **Phases 5/5D**) MAY be delegated to a research subagent or a
+1-per-angle swarm instead of running inline. Without a subagent tool, all
+research runs inline via **Layer A/B** as described above — delegated mode is
+an option, never a requirement.
+
+### How it works
+
+1. **Dispatch:** for each research batch, hand off to a subagent (one per
+   Register category in Deep mode's Phase 4D; one per question in Phases
+   5/5D) with the brief contract from `surf-research-skill`'s delegated
+   research section (objective, source categories, scope boundary, validated
+   return format with ledger rows + confirmed claims + detected doubts).
+2. **Receive:** the subagent returns validated findings (2+ sources per key
+   claim, dates checked, contradictions flagged) plus ledger rows and any new
+   doubts it surfaced.
+3. **Review:** the main agent — still the interviewer — reviews the returns.
+   New doubts enter the **Ambiguity Register** (Deep mode) or become the next
+   wave's targets.
+4. **Iterate:** if new doubts survive review and you are under the **3-wave
+   cap** (inherited from `surf-research-skill` rule 7 — delegated mode does
+   NOT raise it), re-brief and dispatch again. Stop when saturated or the cap
+   is hit; record remaining gaps.
+
+### Fallback
+
+No subagent tool available? Run the research inline via Layer A or B as the
+current Phases 3/4D/5/5D/6 already prescribe — the gate, ledger, Register,
+and lock rules apply exactly as they do today. Delegated mode adds throughput
+without removing the existing path.
 
 ## Plan-approval modes (Claude Code plan mode and similar)
 
@@ -132,6 +182,7 @@ surf-plan progress (normal):
 - [ ] Phase 6: synthesis research done (≥2 queries, ledger updated)
 - [ ] Gate open: research lock satisfied → plan may be delivered
 - [ ] Phase 7: plan delivered (file written, or approval requested in plan mode)
+- [ ] Follow-up offered: open items / assumptions to validate surfaced after delivery
 ```
 
 **Deep mode:**
@@ -147,6 +198,7 @@ surf-plan progress (deep):
 - [ ] Phase 6D: synthesis research done
 - [ ] Phase 7D: plan delivered (Register + Ledger embedded)
 - [ ] Self-check: every Register item Answered/ASSUMPTION; every claim traces to a ledger row
+- [ ] Follow-up offered: open items / assumptions to validate surfaced after delivery
 ```
 
 ## Phase 0 — resolve the research layer (always, no exceptions)
@@ -221,7 +273,17 @@ that cost is worth paying.
 
 Before opening the conversation, research the topic from 3 angles.
 
-Layer A — one batched call (multiple positional args = single bash turn):
+Layer A — one surf-ai call. It plans its own queries across all three angles,
+runs them concurrently, and returns a cited synthesis:
+```bash
+surf-search-normal "<task topic>: prevailing approaches, common pitfalls, and production/security gotchas" \
+  --task "planning <task topic> for this codebase" \
+  --goal "open the conversation with 3 dominant approaches, 2-3 common mistakes, 1-2 gotchas" \
+  --insights "<what the codebase read suggests — state it so it gets verified>" \
+  --deliverable "3 dominant approaches (1 sentence each), 2-3 common mistakes, 1-2 security/perf gotchas, each cited"
+```
+
+Layer A-manual — when you want raw hits instead of a synthesis:
 ```bash
 surf-research-skill search \
   "<task topic> best practices 2026" \
@@ -261,17 +323,20 @@ research protocol. For each question, in order:
 Rules: **never ask without a fresh search backing it**; **max 5 total** (if
 you'd need more, the task is too vague — ask the user to slice it); don't
 waste questions on aesthetics; if an answer surprises you, run one more
-targeted search before continuing.
+targeted search before continuing. If an answer raises new doubts, run an
+extra question round instead of pushing forward — the cost of one more
+question is lower than the cost of a wrong assumption.
 
 ### Phase 6 — pre-plan synthesis research (REQUIRED)
 
-After the user's last answer, run **one final batch** to verify your
-synthesis against the very-latest state of the art:
+After the user's last answer, run **one final call** to verify your synthesis
+against the very-latest state of the art:
 ```bash
-surf-research-skill search \
-  "<task with user's chosen approach> production setup 2026" \
-  "<chosen architecture> reference implementation" \
-  --max 3 --quiet
+surf-search-normal "<task with the user's chosen approach>: production setup and reference implementations" \
+  --task "writing the execution plan for <task>" \
+  --goal "confirm the chosen approach is still current and find a reference implementation" \
+  --insights "the user chose <approach>; I plan to <one-line plan summary>" \
+  --deliverable "confirmation or contradiction of the chosen approach, plus 1-2 reference implementations"
 ```
 If this reveals a contradiction with what the user chose, **flag it before
 writing** the plan; don't bury it. Update the ledger. **The research lock is
@@ -318,10 +383,22 @@ completeness is the whole point of this mode.
 ### Phase 4D — GROUNDING (→ Research Ledger)
 
 For each ambiguity whose answer depends on external facts (library behavior,
-best practice, API limits, version differences), launch parallel research so
-each clarifying option is backed by a real finding. Build a queries file (one
-query per independent unknown × angle) and fan out — see **"How to research
-and resolve a technical doubt"** below for query craft, then:
+best practice, API limits, version differences), ground it in real findings so
+each clarifying option traces to a source.
+
+Preferred — one surf-ai call per ambiguity CLUSTER (not per query: surf-ai
+writes its own queries and fans them out concurrently):
+```bash
+surf-search-normal "<the cluster of unknowns, stated as one question>" \
+  --task "planning <task>; resolving ambiguity cluster '<cluster name>'" \
+  --goal "give each clarifying option a real, cited basis" \
+  --insights "<the assumptions this cluster would otherwise rest on>" \
+  --deliverable "the 2-4 realistic options with trade-offs, each cited"
+```
+On a no-limit harness (Pi core) or with a long Bash timeout, use
+`surf-search-unlimit` for the highest-stakes cluster.
+
+Layer A-manual — when you want the raw hits for a hand-built queries file:
 ```bash
 # Pi core (no limit): add --no-budget. Time-limited harness: drop it, lower --concurrency.
 surf-research-skill search-parallel --queries-file /tmp/plan-queries.json \
@@ -344,6 +421,11 @@ Turn the Register into questions and ask via **AskUserQuestion**:
   needed. Items you can safely settle by research → mark ASSUMPTION (don't
   ask), and list assumptions for the user to veto.
 - Single-select for mutually exclusive; multi-select for "all that apply".
+
+If a round of answers raises new doubts that change the register, run an
+extra round of clarifying questions before moving to Phase 6D — the ambiguity
+lock requires every item to be Answered or ASSUMPTION, and a surprising answer
+may create new items.
 
 ### Phase 6D — synthesis research (REQUIRED)
 
@@ -508,6 +590,9 @@ After writing the file, announce:
 
 > Plan written to `<path>`.
 > Review it, then say "execute the plan" (or hand it to another agent).
+>
+> **Open items to validate:** [list the assumptions that weren't resolved and
+> any open items from the register — offer to research them next.]
 
 ## Mandatory rules (the agent reading this must follow)
 
@@ -574,10 +659,14 @@ surf-plan-skill doctor               # verify surf-research-skill installed + ke
 surf-plan-skill --version
 surf-plan-skill --help
 
-# Research — Layer A (surf-research-skill CLI)
+# Research — Layer A (surf-ai: it plans the queries, you write the brief)
+surf-search-normal "<question>" --task "planning X" --goal "…" --insights "…" --deliverable "…"
+surf-search-unlimit "<open-ended question>" --max-rounds 4   # no-limit harness / long Bash timeout
+
+# Research — Layer A-manual (raw hits, no synthesis)
 surf-research-skill search "Q1" "Q2" "Q3" --max 3 --quiet         # batch baseline
 surf-research-skill search "specific decision" --max 2 --quiet    # targeted question
-surf-research-skill search-parallel --queries-file F.json --concurrency 8 --json  # Deep mode grounding
+surf-research-skill search-parallel --queries-file F.json --concurrency 8 --json  # hand-built fan-out
 surf-research-skill extract --urls-file U.json --depth advanced --json
 
 # Research — Layer B (when Bash is blocked: plan mode, denied perms, no CLI)

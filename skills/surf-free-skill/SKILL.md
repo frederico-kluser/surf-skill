@@ -16,8 +16,8 @@ license: MIT
 argument-hint: "<what to look up, free — e.g. 'Alan Turing'>"
 allowed-tools: Bash(surf-free-skill:*), Read
 metadata:
-  version: "5.2.0"
-  requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill + surf-plan-skill + surf-free-skill); NO API key needed — search is answered by Wikipedia + DuckDuckGo."
+  version: "5.4.0"
+  requires: "node>=18; install via `npm i -g surf-skill` (bundles surf-research-skill with its surf-ai loop + surf-plan-skill + surf-free-skill); NO API key needed — search is answered by Wikipedia + DuckDuckGo."
 ---
 
 # surf-free-skill — free, keyless web search
@@ -61,3 +61,10 @@ to silence stderr progress.
 - **No keys, no cost.** Every result is 0 credits.
 - **Wikipedia language:** set `SURF_WIKIPEDIA_LANG` (default `en`) — e.g. `pt` for Portuguese.
 - For anything beyond free encyclopedic / instant-answer lookups, defer to `surf-research-skill`.
+
+### Keep the loop going
+
+After answering, suggest 1-2 follow-up lookups the result raised and offer to
+continue. If the answer shows the question is bigger than free keyless search
+can serve, say so and point at `surf-research-skill` — better to redirect than
+to return a thin answer the user asked for depth on.

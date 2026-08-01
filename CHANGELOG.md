@@ -1,5 +1,184 @@
 # Changelog
 
+## v5.4.0 — surf-ai: the research loop moves out of the agent and into the CLI
+
+The headline change: **the calling agent no longer orchestrates research.**
+Previous versions handed the agent a toolbox plus a 600-line SKILL.md
+explaining how to classify a question, decompose it, write a query array, fan
+it out, read the harvest, decide what was missing, and loop. All of that is now
+code, driven by an LLM, inside the CLI.
+
+The agent's job is now two things: **write a brief**, and **pick one of two
+modes**.
+
+### Added
+
+- **`surf-search-normal`** (new bin) — one research round, fitted inside the
+  harness's bash timeout so it returns an answer instead of being killed.
+  Two LLM calls (plan, synthesize). Typical: 45–110 s, ~$0.01–0.03.
+- **`surf-search-unlimit`** (new bin) — as many rounds as the question needs.
+  After each round the LLM lists what is still open and writes the next
+  round's queries; it stops when the analyst reports the success criteria met,
+  when it has no new queries, or at `--max-rounds` (default 6, cap 50). No
+  self-imposed deadline.
+- **`surf-research-skill ai <question> --mode normal|unlimit`** — the same
+  engine as a subcommand. All three entry points share one implementation
+  (`src/lib/ai/cli.mjs`) so they cannot drift.
+- **The brief** — `--task`, `--goal`, `--insights`, `--deliverable`, or
+  `--brief-file <f.json>` for long multi-line briefs. `--insights` is fed to
+  the planner as *hypotheses to falsify*, not as facts, so a run can tell the
+  agent it was about to build on a wrong premise.
+- **`surf-research-skill ai-setup`** / **`surf ai-key`** — the one-question
+  wizard for the OpenRouter key. Validation is free (GET `/api/v1/key`, zero
+  tokens, zero credits). Also accepts `--key` for non-interactive use, and
+  multiple keys for rotation.
+- **`openrouter` is now a first-class key provider** in `keys.json`, inheriting
+  the existing machinery: multi-key rotation, burn-on-auth-failure, monthly
+  un-burn, and 429 cooldowns. It is deliberately absent from every search
+  `capabilityMap` chain, so a search dispatch can never route to it.
+- **`OPENROUTER_API_KEY` / `OPENROUTER_API_KEYS` are read from the
+  environment** — used in memory only and stripped before any write to
+  `keys.json`, so an exported key never gets silently persisted. Search-provider
+  keys remain file-only.
+- **`test/smoke.mjs` + `npm test`** — 103 offline assertions covering loose JSON
+  parsing, the error taxonomy, `Retry-After` parsing, ledger dedupe/truncation,
+  the heuristic fallbacks, brief building, boolean-flag parsing, env-key
+  stripping, output rendering, and the full orchestrator loop (normal, unlimit,
+  repeated-query suppression, total LLM outage, partial search failure, and
+  zero-evidence). Runs against a stubbed `fetch` under a throwaway `HOME` — no
+  network, no keys, no touching the user's config.
+
+### How surf-ai handles failure (the point of the feature)
+
+Nothing in the loop hands the agent an error to handle:
+
+- **Model chain** — `deepseek/deepseek-v4-pro` → `v4-flash-0731` → `v4-flash`
+  → `v3.2` → `chat-v3.1`. Every slug was verified live against
+  `GET /api/v1/models` on 2026-08-01 to have serving endpoints and
+  `structured_outputs` support. (`deepseek/deepseek-v3.2-speciale` is listed on
+  the provider page but returns an **empty endpoints array**, so it is
+  excluded — requesting it fails with no-available-provider.)
+- **Key rotation** — every non-burned, non-cooling OpenRouter key is tried;
+  401/402/403 burns the key and rotates, 429 honors `Retry-After` then cools
+  the key.
+- **Schema downgrade** — `provider.require_parameters: true` makes OpenRouter
+  answer **404** (not 400) when no endpoint implements `json_schema`. That is
+  now mapped to a schema downgrade, not to "unknown model", so a good model
+  isn't discarded over a schema it can still answer in plain text. 503 under
+  the same constraint downgrades before being treated as an outage.
+- **Loose JSON parsing** — fenced blocks, prose preambles, trailing
+  commentary, and braces inside strings all parse.
+- **Keyless search fallback** — when every keyed search provider is exhausted,
+  surf-ai drops to the free Wikipedia + DuckDuckGo tier rather than failing.
+- **Deterministic fallbacks** — no LLM at all still produces a real,
+  cited evidence brief from real searches, labelled `⚠ Degraded mode`.
+- **Failures are ledger rows** — a failed search is recorded with its reason,
+  never silently dropped, so coverage claims stay honest.
+- Exit codes: `0` = an answer (possibly degraded), `1` = nothing retrieved at
+  all, `2` = usage error, `143` = the harness killed it.
+
+### Changed
+
+- **Root `SKILL.md` rewritten** around surf-ai. The mode router, decomposition
+  protocol, query-craft guidance, fan-out gate, wave cap and Research Ledger
+  template are gone from the agent's instructions — the CLI owns them now.
+  What replaced them: how to write the brief, how to choose between the two
+  modes, how to read the footer and the degradation labels, and a compact
+  manual toolbox for the cases surf-ai doesn't cover (`extract` a known URL,
+  `map`/`crawl` a doc site, Parallel's async Task API).
+- **`surf-plan-skill`** — Layer A is now `surf-search-normal` with a planning
+  brief; the raw commands moved to a new "Layer A-manual" tier for when you
+  want hits without synthesis. Phase 3, Phase 4D and Phase 6 examples updated.
+- **`surf` bundle CLI** — new `ai-key` command, a surf-ai section in `doctor`
+  (including whether an env key was detected), and the interactive menu grew an
+  "Add the OpenRouter key" entry.
+- **`surf-research-skill setup`** now prompts for an OpenRouter key alongside
+  the three search providers, and its cheat sheet leads with the surf-ai
+  commands.
+- **Budget detection** — when no harness declares a bash timeout, normal mode
+  budgets **110 s** instead of the 30 s guess `dispatch()` uses for a single
+  search, and says so on stderr. A plan + fan-out + synthesis cannot happen in
+  30 s, and every mainstream harness allows more (Claude Code defaults to 120 s
+  and, since v2.1.210, backgrounds rather than kills on timeout; Pi core
+  enforces none). A *measured* budget is always honored as-is, and
+  `--budget-ms` / `SURF_AI_BUDGET_MS` override everything.
+- **`parseFlags` bug fix** — boolean switches (`--json`, `--ledger`, `--quiet`,
+  `--no-cache`, `--no-fallback`, `--no-budget`, `--confirm-expensive`, `--yes`,
+  `--all`, `--stdin`, `--skip-validate`, `--reset`, `--raw-json`) no longer
+  swallow the following argument. `surf-search-normal --json "my question"`
+  used to set `flags.json = "my question"` and then report the question
+  missing. Dual-use flags (`--answer`, `--raw`) are deliberately excluded, so
+  existing search behavior is unchanged.
+- **README corrected on four long-standing false claims** (found by auditing
+  it against the source): the installer does **not** write `~/.claude/settings.json`
+  or any harness timeout config — it only symlinks skills and creates
+  `keys.json`; nothing has ever written `~/.copilot/skills/` (Copilot reads
+  `~/.agents/skills/`); nothing has ever written `~/.config/opencode/opencode.json`;
+  and the security claim "keys are never read from env" was only true of the
+  CLI — library mode reads `process.env` and `.env` by design. The
+  `--mode` collision between the toolbox (`fast|normal|slow`) and
+  `surf-research-skill ai` (`normal|unlimit`) is now called out explicitly.
+- `state.mjs` exports `SEARCH_PROVIDERS` alongside `PROVIDERS`, so "has a
+  search key" checks don't accidentally count the LLM key.
+- `env.mjs` key discovery is now generic over the provider list instead of
+  hard-coding three providers.
+- `package.json`: 6 bins, a `./ai` export, `npm test`, and `test:syntax` now
+  globs `bin/*.mjs` and `src/lib/ai/*.mjs`.
+- Version strings converge on **5.4.0** across every bin, skill and doc.
+
+### New environment variables
+
+`SURF_AI_MODEL` · `SURF_AI_BUDGET_MS` · `SURF_AI_MAX_TOKENS` ·
+`SURF_AI_TIMEOUT_MS` · `SURF_AI_COOLDOWN_MS` · `SURF_OPENROUTER_BASE`
+
+### Notes
+
+- Existing `keys.json` files are upgraded automatically — the `openrouter`
+  section is added by the normalizer on first load. No migration step.
+- Every pre-existing command (`search`, `search-parallel`, `extract`, `crawl`,
+  `map`, `research*`, `keys`, `cost`, `cache-clear`, `project-config`) is
+  unchanged and still supported.
+
+## v5.3.0 — close-the-loop follow-ups + delegated research (subagent/swarm) mode
+
+Adds two behavioral upgrades across all three installed skills (docs-only, no
+code changes).
+
+### Added
+
+- **Close-the-loop follow-ups** — all three skills now instruct the agent to
+  end every answer with 2-3 concrete follow-ups the findings raised and offer
+  to run them, instead of answering once and going silent. If findings change
+  the user's original question, the agent says so and asks before closing.
+  (`surf-research-skill` SKILL.md § "Close the loop — don't stop at the
+  answer"; `surf-plan-skill` Phase 5/5D + "Deliver the plan" reinforcements;
+  `surf-free-skill` § "Keep the loop going".)
+- **Delegated research (subagent/swarm) mode** — when the harness exposes a
+  subagent tool (Agent / Task / AgentSwarm), `surf-research-skill` and
+  `surf-plan-skill` instruct delegating research and validation to a subagent
+  or a 1-per-angle swarm that returns validated findings (2+ sources per key
+  claim, dates checked, contradictions flagged, plus detected new doubts).
+  The main agent reviews the returns; new doubts become the next wave's
+  targets within the **existing 3-wave cap**. Without a subagent tool, the
+  inline Layer A/B path stays as the fallback — delegated mode is an option,
+  never a requirement.
+- **Progress checklists** — `surf-research-skill` gains R9 (follow-ups
+  offered); `surf-plan-skill` (Normal and Deep) gain a follow-up checklist
+  item.
+
+### Changed
+
+- Root `SKILL.md`, `skills/surf-plan-skill/SKILL.md`,
+  `skills/surf-free-skill/SKILL.md`, `README.md` (3 version strings),
+  and `package.json` bumped to **5.3.0** (all versioned files converge).
+  Legacy `skills/surf-research-skill/SKILL.md` received the two new sections
+  verbatim (version stays 5.0.0; pre-existing drift unchanged).
+- `surf-research-skill` mandatory rules now number 15 (added rules 14 and 15
+  for close-the-loop and delegation preference); anti-patterns section gains
+  "answering once and going silent" and "delegating without a validation
+  contract."
+- No frontmatter `description` or trigger changed. No `.mjs` code modified.
+
 ## v5.2.0 — new surf-free-skill (free, keyless search) + rotation hardening
 
 Adds a **third skill, `surf-free-skill`**: free, keyless web search over
