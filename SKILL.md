@@ -1,28 +1,27 @@
 ---
 name: surf-research-skill
 description: >-
-  Orquestrador de pesquisa multi-agente por rajadas de dúvidas. O agente
-  principal nunca pesquisa: ele levanta todas as dúvidas que tem, dispara uma
-  rajada de sub-agentes paralelos com uma pergunta fechada para cada dúvida, e
-  então analisa se as respostas abriram dúvidas novas. Tem dois modos —
-  rajada-única (uma rajada e sintetiza) e rajada-contínua (novas rajadas até
-  saturar, questionando as próprias respostas). Nos dois modos, uma rajada de
-  contexto consulta a conversa que pediu a pesquisa e o repositório antes de
-  qualquer busca na web. Cada sub-agente usa o CLI surf-ai e devolve um handoff
-  estruturado. Aciona em pesquise, investigue, busca na web, ache tudo sobre,
-  levantamento completo, pesquisa profunda, compare X e Y, search the web,
-  research, investigate, deep dive, find everything about, compare X vs Y,
-  crawl the docs, fetch this page, extract from URL. Não serve para arquivos
-  locais, git, edição de código, nem para escrever plano de execução — para
-  planejar, use surf-plan-skill.
+  Multi-agent research orchestrator using bursts of doubt. The main agent
+  never searches: it raises every question it has, fires a burst of parallel
+  sub-agents with one closed question per doubt, then analyzes whether the
+  answers opened new questions. Two modes — single-burst (one burst and
+  synthesize) and continuous-burst (new bursts until saturation, questioning
+  its own answers). In both modes, a context burst consults the calling
+  conversation and the repository before any web search. Each sub-agent uses
+  the surf-ai CLI and returns a structured handoff. Triggers on: pesquise,
+  investigue, busca na web, ache tudo sobre, levantamento completo, pesquisa
+  profunda, compare X e Y, search the web, research, investigate, deep dive,
+  find everything about, compare X vs Y, crawl the docs, fetch this page,
+  extract from URL. Not for local files, git, code editing, or writing
+  execution plans — for planning, use surf-plan-skill.
 license: MIT
-argument-hint: "pergunta, URL ou tópico — opcionalmente seguido de rajada-única ou rajada-contínua"
+argument-hint: "question, URL, or topic — optionally followed by single-burst or continuous-burst"
 allowed-tools: Agent, Task, Read, Write, Edit, Grep, Glob, Skill, Bash(git:*), Bash(mkdir:*), Bash(ls:*), Bash(wc:*)
 model: inherit
 effort: xhigh
 metadata:
   version: "7.0.0"
-  requires: "node>=18; instale com `npm i -g surf-skill`; chaves de busca via `surf` ou `surf-research-skill setup`; chave do LLM via `surf-research-skill ai-setup` (ou OPENROUTER_API_KEY exportada); timeout de bash por projeto via `surf-research-skill project-config`"
+  requires: "node>=18; install with `npm i -g surf-skill`; search keys via `surf` or `surf-research-skill setup`; LLM key via `surf-research-skill ai-setup` (or exported OPENROUTER_API_KEY); per-project bash timeout via `surf-research-skill project-config`"
   environment: "A rota CALLER usa `subagent_type: \"fork\"`, que exige fork mode (CLAUDE_CODE_FORK_SUBAGENT=1 ou rollout escalonado). Sem ele a rota cai para INLINE automaticamente — nada quebra."
 ---
 
