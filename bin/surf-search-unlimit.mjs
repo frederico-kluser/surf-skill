@@ -40,6 +40,8 @@ Tuning:
   --max N             results per search (default 8)
   --search-mode <fast|normal|slow>
   --ai-model <slug>   override the LLM (default deepseek/deepseek-v4-pro)
+  --budget-ms N         Override the self-budget (0 = unlimited). Also SURF_AI_BUDGET_MS.
+  --no-cache            Skip the response cache for this run.
 
 Output:
   --json              structured envelope (plan, ledger, sources, diagnostics)
