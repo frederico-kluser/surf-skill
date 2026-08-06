@@ -1,5 +1,34 @@
 # Changelog
 
+## v7.0.0 — documentação alinhada, débitos resolvidos
+
+### Changed
+
+- **Versão alinhada** em todos os artefatos (package.json, bins, src, skills, README).
+  SKILL.md principal migrou para arquitetura de orquestrador autônomo multi-agente
+  com rajadas de dúvidas (v7.0.0).
+- **src/lib/ai/orchestrator.mjs** agora declara `const VERSION`.
+- **CHANGELOG.md** consolidado com entradas para v6.0.0 e v7.0.0.
+
+## v6.0.0 — orquestrador autônomo multi-agente
+
+### Added
+
+- **surf-research-skill transformado em orquestrador autônomo**: o agente principal
+  nunca pesquisa — ele levanta dúvidas, dispara rajadas de sub-agentes paralelos,
+  e faz triagem das respostas. Dois modos: rajada-única e rajada-contínua.
+- **SKILL.md reescrito** como `<orchestrator>` com regras formais (R1-R9),
+  registro de dúvidas, roteamento (CALLER/PROJECT/WEB), e portão de admissão.
+- **Templates T1-T8** em `references/burst-templates.md` para delegação
+  estruturada a sub-agentes.
+- **Convergência** por contagem de rajadas secas (k=2), saturação de fontes,
+  e teto duro de 12 rajadas.
+
+### Changed
+
+- surf-research-skill passa de toolbox de comandos para orquestrador de
+  pesquisa — o loop de pesquisa sai do agente e vai para a skill.
+
 ## v5.4.0 — surf-ai: the research loop moves out of the agent and into the CLI
 
 The headline change: **the calling agent no longer orchestrates research.**

@@ -81,7 +81,7 @@ plan / design ──▶ surf-plan-skill ──▶ Normal (research-grounded)
 
 | | |
 |---|---|
-| **Status** | v5.4.0 (npm) |
+| **Status** | v7.0.0 (npm) |
 | **Install** | `npm i -g surf-skill` (Linux · macOS · Windows) |
 | **Skills shipped** | `surf-research-skill` (surf-ai) · `surf-plan-skill` · `surf-free-skill` |
 | **Bins shipped** | `surf`, `surf-search-normal`, `surf-search-unlimit`, `surf-research-skill`, `surf-plan-skill`, `surf-free-skill` |
@@ -808,11 +808,11 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 
 ---
 
-## Repository layout (v5.4.0)
+## Repository layout (v7.0.0)
 
 ```text
 .
-├── package.json                       ← name: surf-skill (npm), version 5.4.0, 6 bins
+├── package.json                       ← name: surf-skill (npm), version 7.0.0, 6 bins
 ├── README.md           ← you're here
 ├── CHANGELOG.md
 ├── LICENSE

@@ -16,7 +16,7 @@ import { setSilent } from '../src/lib/progress.mjs';
 import { runAiCommand, reportAiError } from '../src/lib/ai/cli.mjs';
 import { migrateLegacy } from '../src/lib/state.mjs';
 
-const VERSION = '5.4.0';
+const VERSION = '7.0.0';
 
 const HELP = `surf-search-normal — autonomous web research, ONE round
 
