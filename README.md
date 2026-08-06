@@ -825,10 +825,13 @@ research-poll <id>`. Sync research is capped at 50 s on purpose.
 │   ├── surf-research-skill.mjs        ← multi-provider web research CLI + `ai` subcommands
 │   ├── surf-free-skill.mjs            ← keyless search CLI
 │   └── surf-plan-skill.mjs            ← planning workflow CLI
+├── references/                        ← read on demand by the research orchestrator
+│   ├── burst-templates.md             ← the 8 sub-agent prompt templates (T1–T8)
+│   ├── failure-modes.md               ← the 10 degradation cases
+│   └── surf-ai-cli.md                 ← CLI reference for writing delegation prompts
 ├── skills/
 │   ├── surf-plan-skill/SKILL.md       ← planning (auto-routes to an ambiguity-sweep mode)
-│   ├── surf-free-skill/SKILL.md       ← free keyless search
-│   └── surf-research-skill/SKILL.md   ← mirror of the root SKILL.md
+│   └── surf-free-skill/SKILL.md       ← free keyless search
 ├── test/
 │   └── smoke.mjs                      ← offline suite: stubs fetch, temp HOME, 95 assertions
 ├── src/
