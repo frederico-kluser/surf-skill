@@ -1,219 +1,220 @@
-# Templates de rajada — surf-research-skill v7
+# Burst templates — surf-research-skill v7
 
-Prompts prontos para o orquestrador copiar e preencher. Cada `{{CAMPO}}` é
-substituído antes de disparar. **Nunca dispare um sub-agente sem preencher
-todos os campos** — sub-agente sem fronteiras produz trabalho duplicado, e
-sub-agente sem critério de suficiência para na primeira coisa que parecer
-relevante.
+Ready-to-use prompts for the orchestrator to copy and fill in. Each `{{FIELD}}` is
+replaced before firing. **Never fire a sub-agent without filling in all
+fields** — a sub-agent without boundaries produces duplicate work, and a
+sub-agent without a sufficiency criterion stops at the first thing that looks
+relevant.
 
-Os blocos de prompt abaixo usam cerca de **quatro** crases por fora, porque os
-prompts contêm blocos de três crases por dentro. Ao copiar um template, copie o
-conteúdo do bloco externo, não a cerca dele.
+The prompt blocks below use roughly **four** backticks on the outside, because the
+prompts contain triple-backtick blocks on the inside. When copying a template, copy the
+content of the outer block, not its fence.
 
-## Índice
+## Index
 
-| # | Template | Quando |
+| # | Template | When |
 |---|----------|--------|
-| T1 | Probe do CHAMADOR (`fork`, ou inline) | Rajada 0 de toda pesquisa, e em toda rajada que tenha dúvida de rota CALLER |
-| T2 | Probe do PROJETO (`Explore`) | Rajada 0 de toda pesquisa, e em toda rajada que tenha dúvida de rota PROJECT |
-| T3 | Sub-agente de DÚVIDA (`general-purpose`) | Toda dúvida com rota WEB, em qualquer rajada |
-| T4 | Revisor ADVERSARIAL | Uma vez, depois da última rajada |
-| T5 | Auditor de COBERTURA | Uma vez, junto com T4 |
-| T6 | SINTETIZADOR | Uma vez, agente único |
-| T7 | DEVOLUÇÃO ao agente que te lançou | Fim, só quando a sua conversa é a de um sub-agente |
-| T8 | RELATÓRIO FINAL | Fim, sempre — é o que o usuário lê |
+| T1 | CALLER Probe (`fork`, or inline) | Burst 0 of every research, and in every burst that has a CALLER-route doubt |
+| T2 | PROJECT Probe (`Explore`) | Burst 0 of every research, and in every burst that has a PROJECT-route doubt |
+| T3 | DOUBT sub-agent (`general-purpose`) | Every doubt with WEB route, in any burst |
+| T4 | ADVERSARIAL Reviewer | Once, after the last burst |
+| T5 | COVERAGE Auditor | Once, alongside T4 |
+| T6 | SYNTHESIZER | Once, single agent |
+| T7 | HANDOFF to the agent that launched you | End, only when your conversation is that of a sub-agent |
+| T8 | FINAL REPORT | End, always — this is what the user reads |
 
-**Uma dúvida por sub-agente vale para o T3, não para os probes.** T1 e T2
-recebem a LISTA de dúvidas da rota deles: uma fork e uma Explore por rajada,
-nunca uma por dúvida. Um `fork` carrega a conversa inteira; N forks são N
-cópias dela.
+**One doubt per sub-agent applies to T3, not to the probes.** T1 and T2
+receive the LIST of doubts for their route: one fork and one Explore per burst,
+never one per doubt. A `fork` carries the entire conversation; N forks are N
+copies of it.
 
-O contrato de delegação comum a T1–T3 tem **cinco campos obrigatórios**:
-objetivo, formato de saída, ferramentas e fontes, **fronteiras** e **critério
-de suficiência**. Os quatro primeiros são o contrato publicado pela Anthropic
-para delegação a sub-agentes ("an objective, an output format, guidance on the
-tools and sources to use, and clear task boundaries"). O quinto é adição desta
-skill, e mira a ponta oposta à que a Anthropic documenta: a Anthropic relata
-sub-agentes que gastam esforço **demais** ("prevent overinvestment in simple
-queries, which was a common failure mode in our early versions") e ataca isso
-com heurísticas de esforço embutidas no prompt — 1 agente e 3–10 chamadas para
-fato simples, 2–4 sub-agentes e 10–15 chamadas para comparação direta —, que
-`<budgets><sizing>` reflete em número de agentes. O critério de suficiência,
-escrito antes da primeira busca, mira o sub-agente que para cedo demais porque
-"achou algo relevante".
+The delegation contract common to T1–T3 has **five mandatory fields**:
+objective, output format, tools and sources, **boundaries**, and **sufficiency
+criterion**. The first four are the contract published by Anthropic for
+delegation to sub-agents ("an objective, an output format, guidance on the
+tools and sources to use, and clear task boundaries"). The fifth is an addition
+by this skill, and it targets the opposite end of what Anthropic documents:
+Anthropic reports sub-agents that spend **too much** effort ("prevent
+overinvestment in simple queries, which was a common failure mode in our early
+versions") and tackles this with effort heuristics built into the prompt — 1
+agent and 3–10 calls for a simple fact, 2–4 sub-agents and 10–15 calls for
+direct comparison —, which `<budgets><sizing>` reflects in number of agents.
+The sufficiency criterion, written before the first search, targets the
+sub-agent that stops too soon because it "found something relevant."
 
 ---
 
-## T1 — Probe do CHAMADOR (`subagent_type: "fork"`, ou inline)
+## T1 — CALLER Probe (`subagent_type: "fork"`, or inline)
 
-Um `fork` herda a sua conversa inteira — a mesma em que esta skill foi
-carregada. Serve para destilar o que essa conversa já sabe **sem gastar o seu
-contexto** relendo tudo.
+A `fork` inherits your entire conversation — the same one in which this skill
+was loaded. It serves to distill what that conversation already knows **without
+spending your context** rereading everything.
 
-**Se o modo fork estiver desligado** (`Agent type 'fork' not found`), o
-orquestrador preenche este mesmo formato por conta própria: o prompt abaixo
-vira um roteiro de auto-destilação, e as FRONTEIRAS continuam valendo — em
-especial o NÃO CONSTA. Registre `Via=INLINE`. Não re-dispare o fork.
+**If fork mode is off** (`Agent type 'fork' not found`), the orchestrator fills
+in this same format on its own: the prompt below becomes a self-distillation
+roadmap, and the BOUNDARIES still apply — especially DOES NOT STATE. Record
+`Via=INLINE`. Do not re-fire the fork.
 
 ````
-Você é um PROBE DE CONTEXTO. Você herdou a conversa inteira em que esta
-pesquisa foi pedida. NÃO pesquise na web. NÃO leia arquivos que já não estejam
-na sua conversa herdada. Sua única função é DESTILAR o que essa conversa já
-sabe e que muda a pesquisa abaixo.
+You are a CONTEXT PROBE. You inherited the entire conversation in which this
+research was requested. Do NOT search the web. Do NOT read files that are not
+already in your inherited conversation. Your only job is to DISTILL what that
+conversation already knows and that changes the research below.
 
-## PERGUNTA DA PESQUISA
+## RESEARCH QUESTION
 {{ORIGINAL_QUESTION}}
 
-## DÚVIDAS QUE O ORQUESTRADOR PRECISA FECHAR
+## DOUBTS THE ORCHESTRATOR NEEDS TO CLOSE
 {{DOUBTS_ROUTED_TO_CALLER}}
 
-## O QUE EXTRAIR
-1. O que está sendo construído, e em que estágio.
-2. Stack e versões EXATAS já decididas ou já em uso.
-3. Restrições já fixadas: prazo, orçamento, licença, runtime, "não podemos usar X".
-4. Decisões já tomadas e descartadas — e o motivo do descarte.
-5. O que já foi tentado e falhou (isso evita que a pesquisa recomende o que já quebrou).
-6. O formato de resposta esperado.
-7. Para cada dúvida listada acima: a conversa responde, responde em parte, ou não responde?
+## WHAT TO EXTRACT
+1. What is being built, and at what stage.
+2. Stack and EXACT versions already decided or already in use.
+3. Constraints already fixed: deadline, budget, license, runtime, "we can't use X."
+4. Decisions already made and discarded — and the reason for discarding.
+5. What has already been tried and failed (this prevents the research from recommending what already broke).
+6. The expected response format.
+7. For each doubt listed above: does the conversation answer it, answer it partially, or not answer it?
 
-## FRONTEIRAS
-- NÃO invente. Se a conversa não diz, escreva "NÃO CONSTA".
-- NÃO resuma a conversa inteira. Só o que muda a pesquisa.
-- NÃO opine sobre a resposta da pesquisa. Você entrega contexto, não conclusões.
+## BOUNDARIES
+- Do NOT invent. If the conversation doesn't say, write "DOES NOT STATE."
+- Do NOT summarize the entire conversation. Only what changes the research.
+- Do NOT opine on the research answer. You deliver context, not conclusions.
 
-## CRITÉRIO DE SUFICIÊNCIA
-Você só termina quando cada uma das dúvidas acima tiver um veredito
-(RESPONDE / RESPONDE-EM-PARTE / NÃO CONSTA) e os itens 1–3 estiverem
-preenchidos com valores concretos ou marcados NÃO CONSTA.
+## SUFFICIENCY CRITERION
+You only finish when each of the doubts above has a verdict
+(ANSWERS / ANSWERS-PARTIALLY / DOES NOT STATE) and items 1–3 are filled in
+with concrete values or marked DOES NOT STATE.
 
-## FORMATO DE SAÍDA (máx. 600 palavras)
+## OUTPUT FORMAT (max. 600 words)
 
 ```markdown
-## Contexto do chamador
-- **Construindo:** ...
-- **Stack e versões:** ...
-- **Restrições fixas:** ...
-- **Decisões tomadas:** ...
-- **Descartado (e por quê):** ...
-- **Já tentado e falhou:** ...
-- **Formato esperado:** ...
+## Caller context
+- **Building:** ...
+- **Stack and versions:** ...
+- **Fixed constraints:** ...
+- **Decisions made:** ...
+- **Discarded (and why):** ...
+- **Already tried and failed:** ...
+- **Expected format:** ...
 
-## Vereditos das dúvidas
-| Dúvida | Veredito | Conteúdo / o que falta |
+## Doubt verdicts
+| Doubt | Verdict | Content / what's missing |
 |--------|----------|------------------------|
-| D3 | RESPONDE | Node 20.11, fixado no package.json |
-| D5 | NÃO CONSTA | — |
+| D3 | ANSWERS | Node 20.11, fixed in package.json |
+| D5 | DOES NOT STATE | — |
 
-## Dúvidas novas que este contexto cria
-- [ou "Nenhuma"]
+## New doubts this context creates
+- [or "None"]
 ```
 ````
 
-### Sobre `SendMessage` — leia antes de procurar um chamador
+### About `SendMessage` — read before looking for a caller
 
-Esta skill roda INLINE: o conteúdo do SKILL.md entra na conversa de quem a
-invocou e fica lá. Ou seja, **o orquestrador É o agente chamador**. Não existe
-um chamador separado para mensagear — e é justamente por isso que o `fork` do
-T1 funciona: ele destila a sua própria conversa sem gastar o seu contexto.
+This skill runs INLINE: the content of SKILL.md enters the conversation of
+whoever invoked it and stays there. That is, **the orchestrator IS the calling
+agent**. There is no separate caller to message — and that is precisely why the
+T1 `fork` works: it distills your own conversation without spending your
+context.
 
-`SendMessage` só é saída quando **você mesmo** é um sub-agente de outro agente.
-Nesse caso o harness injeta, no seu início, um roster de irmãos listando `main`
-e os demais agentes nomeados da sessão — cada um deles um `to` válido (Claude
-Code v2.1.206+; o roster só aparece se `SendMessage` estiver nas suas
-ferramentas). Sem roster, não há a quem perguntar: pare aqui. Nome de agente
-concluído continua valendo — um envio o retoma do transcript —, então "ainda
-está rodando" não é pré-requisito.
+`SendMessage` is only an exit when **you yourself** are a sub-agent of another
+agent. In that case the harness injects, at your start, a sibling roster
+listing `main` and the other named agents in the session — each one a valid
+`to` (Claude Code v2.1.206+; the roster only appears if `SendMessage` is in
+your tools). Without a roster, there is no one to ask: stop here. A completed
+agent's name remains valid — a send resumes it from its transcript — so "still
+running" is not a prerequisite.
 
-Antes de tentar: `SendMessage` não está no `allowed-tools` desta skill, então a
-chamada cai nas permissões do usuário e pode travar a rajada. O caminho padrão
-continua sendo o da R2 — releia sua própria conversa, use o probe do PROJETO
-(T2), e só então infira, registrando a premissa no relatório final.
+Before attempting: `SendMessage` is not in this skill's `allowed-tools`, so the
+call hits user permissions and can freeze the burst. The default path is still
+R2 — reread your own conversation, use the PROJECT probe (T2), and only then
+infer, recording the premise in the final report.
 
 ---
 
-## T2 — Probe do PROJETO (`subagent_type: "Explore"`)
+## T2 — PROJECT Probe (`subagent_type: "Explore"`)
 
 ````
-Você é um PROBE DE PROJETO. Leia o repositório e responda APENAS o que está
-escrito nele. NÃO pesquise na web. NÃO edite nada.
+You are a PROJECT PROBE. Read the repository and answer ONLY what is written
+in it. Do NOT search the web. Do NOT edit anything.
 
-## PERGUNTA DA PESQUISA
+## RESEARCH QUESTION
 {{ORIGINAL_QUESTION}}
 
-## DÚVIDAS QUE O ORQUESTRADOR PRECISA FECHAR
+## DOUBTS THE ORCHESTRATOR NEEDS TO CLOSE
 {{DOUBTS_ROUTED_TO_PROJECT}}
 
-## O QUE EXTRAIR
-1. Versões exatas: manifestos de dependência, lockfiles, versão de runtime, CI.
-2. Se o assunto da pesquisa JÁ existe no código — onde, e como está implementado.
-3. Convenções vigentes que a resposta terá de respeitar (padrões, camadas, estilo).
-4. Restrições visíveis no repositório: licença, tamanho de bundle, alvos suportados.
-5. Para cada dúvida listada: o repositório responde, responde em parte, ou não responde?
+## WHAT TO EXTRACT
+1. Exact versions: dependency manifests, lockfiles, runtime version, CI.
+2. Whether the research subject ALREADY exists in the code — where, and how it is implemented.
+3. Current conventions the answer must respect (patterns, layers, style).
+4. Constraints visible in the repository: license, bundle size, supported targets.
+5. For each doubt listed: does the repository answer it, answer it partially, or not answer it?
 
-## FRONTEIRAS
-- Amplitude: {{BREADTH}}  (média | muito minuciosa)
-- NÃO leia arquivo inteiro quando um trecho basta. Cite `arquivo:linha`.
-- NÃO responda nada que dependa da web — isso é de outro sub-agente.
+## BOUNDARIES
+- Breadth: {{BREADTH}}  (medium | very thorough)
+- Do NOT read an entire file when a snippet suffices. Cite `file:line`.
+- Do NOT answer anything that depends on the web — that belongs to another sub-agent.
 
-## CRITÉRIO DE SUFICIÊNCIA
-Você só termina quando cada dúvida listada tiver veredito e cada versão
-declarada tiver a origem citada em `arquivo:linha`.
+## SUFFICIENCY CRITERION
+You only finish when every listed doubt has a verdict and every declared
+version has its origin cited as `file:line`.
 
-## FORMATO DE SAÍDA (máx. 600 palavras)
+## OUTPUT FORMAT (max. 600 words)
 
 ```markdown
-## Fatos do projeto
-| Fato | Valor | Fonte |
+## Project facts
+| Fact | Value | Source |
 |------|-------|-------|
 | Runtime | node>=18 | package.json:71 |
 
-## O assunto já existe no código?
-[Onde, como, e o que isso implica — ou "Não existe"]
+## Does the subject already exist in the code?
+[Where, how, and what that implies — or "Does not exist"]
 
-## Convenções a respeitar
+## Conventions to respect
 - ...
 
-## Vereditos das dúvidas
-| Dúvida | Veredito | Conteúdo / o que falta |
+## Doubt verdicts
+| Doubt | Verdict | Content / what's missing |
 |--------|----------|------------------------|
 
-## Dúvidas novas que o código cria
-- [ou "Nenhuma"]
+## New doubts the code creates
+- [or "None"]
 ```
 ````
 
 ---
 
-## T3 — Sub-agente de DÚVIDA (`subagent_type: "general-purpose"`)
+## T3 — DOUBT sub-agent (`subagent_type: "general-purpose"`)
 
-**Uma dúvida por sub-agente.** É o que torna a rajada rastreável: cada handoff
-que volta fecha exatamente uma linha do registro.
+**One doubt per sub-agent.** This is what makes the burst traceable: each
+handoff that comes back closes exactly one line in the register.
 
 ````
-Você é um sub-agente de pesquisa. Você existe para fechar UMA dúvida. Execute
-a pesquisa, escreva o handoff completo em disco e devolva o resumo.
+You are a research sub-agent. You exist to close ONE doubt. Execute the
+research, write the full handoff to disk, and return the summary.
 
-## SUA DÚVIDA — {{DOUBT_ID}}
+## YOUR DOUBT — {{DOUBT_ID}}
 {{DOUBT_TEXT}}
 
-## POR QUE ELA IMPORTA
+## WHY IT MATTERS
 {{WHY_IT_MATTERS}}
-(Isto é o que a resposta final deixa de poder afirmar se você voltar de mãos vazias.)
+(This is what the final answer can no longer claim if you come back empty-handed.)
 
-## CONTEXTO JÁ ESTABELECIDO — trate como dado, não pesquise de novo
+## ALREADY ESTABLISHED CONTEXT — treat as given, do not research again
 {{ESTABLISHED_CONTEXT}}
-(Fatos do projeto e do chamador vindos da Rajada 0, mais o que rajadas
-anteriores já fecharam. Se algo aqui contradisser o que você achar na web,
-reporte a contradição em vez de escolher um lado sozinho.)
+(Facts from the project and the caller coming from Burst 0, plus what previous
+bursts have already closed. If anything here contradicts what you find on the
+web, report the contradiction instead of picking a side on your own.)
 
-## OBJETIVO
-Fechar {{DOUBT_ID}} com evidência citável, no formato de saída abaixo.
+## OBJECTIVE
+Close {{DOUBT_ID}} with citable evidence, in the output format below.
 
-## FERRAMENTAS E FONTES
-Execute o CLI surf-ai. Escolha UM:
+## TOOLS AND SOURCES
+Run the surf-ai CLI. Pick ONE:
 
 ```bash
-# Padrão — 1 rodada, 45–110 s:
+# Default — 1 round, 45–110 s:
 surf-search-normal "{{DOUBT_TEXT}}" \
   --task "{{TASK_CONTEXT}}" \
   --goal "{{GOAL}}" \
@@ -221,7 +222,7 @@ surf-search-normal "{{DOUBT_TEXT}}" \
   --deliverable "{{DELIVERABLE}}" \
   --json --out {{HANDOFF_DIR}}/{{DOUBT_ID}}.json
 
-# Só se a dúvida for genuinamente aberta OU o modo global for rajada-contínua:
+# Only if the doubt is genuinely open-ended OR the global mode is continuous-burst:
 surf-search-unlimit "{{DOUBT_TEXT}}" \
   --task "{{TASK_CONTEXT}}" --goal "{{GOAL}}" \
   --insights "{{ASSUMPTIONS_TO_FALSIFY}}" --deliverable "{{DELIVERABLE}}" \
@@ -229,291 +230,295 @@ surf-search-unlimit "{{DOUBT_TEXT}}" \
   --json --out {{HANDOFF_DIR}}/{{DOUBT_ID}}.json
 ```
 
-Timeout do Bash: 180000 ms para `normal`, 600000 ms para `unlimit`.
-Esforço proporcional: fato simples pede 3–10 chamadas de ferramenta; dúvida
-comparativa, 10–15. Diversidade de fontes importa mais que quantidade: doc
-oficial · spec/RFC · benchmark · aviso de segurança · discussão de comunidade ·
-pesquisa primária. Três hits do mesmo blog valem menos que um doc + um benchmark.
+Bash timeout: 180000 ms for `normal`, 600000 ms for `unlimit`.
+Effort proportional: a simple fact calls for 3–10 tool calls; a comparative
+doubt, 10–15. Source diversity matters more than quantity: official docs ·
+spec/RFC · benchmark · security advisory · community discussion · primary
+research. Three hits from the same blog are worth less than one doc + one
+benchmark.
 
-## FRONTEIRAS — não invada o território dos irmãos
-Nesta mesma rajada, outros sub-agentes estão cuidando de:
+## BOUNDARIES — do not invade your siblings' territory
+In this same burst, other sub-agents are handling:
 {{SIBLING_ROSTER}}
-NÃO pesquise esses pontos. Se topar com algo relevante para um irmão, registre
-em "Achados fora do escopo" e siga. Não expanda sua dúvida.
+Do NOT research these points. If you stumble upon something relevant to a
+sibling, record it under "Out-of-scope findings" and move on. Do not expand
+your doubt.
 
-## CRITÉRIO DE SUFICIÊNCIA — escreva antes de começar
-Antes da primeira busca, escreva quais evidências você precisa reunir para
-considerar {{DOUBT_ID}} fechada. Só pare quando as tiver, ou quando tiver
-provado que não existem. Não declare sucesso porque "achou algo relevante".
+## SUFFICIENCY CRITERION — write before you begin
+Before the first search, write down what evidence you need to gather to
+consider {{DOUBT_ID}} closed. Only stop when you have it, or when you have
+proven it does not exist. Do not declare success because you "found something
+relevant."
 
-## REGRAS
-1. Não invente. O CLI planeja as queries, busca em paralelo e sintetiza.
-2. Nunca pergunte nada ao usuário.
-3. ESCADA DE FALHA — esta é a única, e ela é sua: se o CLI falhar, tente uma
-   segunda vez com `--max-queries 4`. Se falhar de novo, use WebSearch/WebFetch
-   do harness e declare FALLBACK no handoff. FALLBACK com resposta citável é
-   entrega válida, não falha.
-4. Escreva o handoff COMPLETO em `{{HANDOFF_DIR}}/{{DOUBT_ID}}.md` (com todas as
-   fontes e trechos) e devolva apenas o RESUMO abaixo. O orquestrador lê o
-   resumo; o sintetizador lê o arquivo. Se o resumo não bastar para o
-   orquestrador julgar se surgiu dúvida nova, ele abre o arquivo — por isso os
-   campos de contradição e de dúvidas novas são obrigatórios, nunca "n/a".
+## RULES
+1. Do not invent. The CLI plans the queries, searches in parallel, and synthesizes.
+2. Never ask the user anything.
+3. FAILURE LADDER — this is the only one, and it is yours: if the CLI fails,
+   try a second time with `--max-queries 4`. If it fails again, use the
+   harness's WebSearch/WebFetch and declare FALLBACK in the handoff. FALLBACK
+   with a citable answer is a valid delivery, not a failure.
+4. Write the COMPLETE handoff to `{{HANDOFF_DIR}}/{{DOUBT_ID}}.md` (with all
+   sources and excerpts) and return only the SUMMARY below. The orchestrator
+   reads the summary; the synthesizer reads the file. If the summary is not
+   enough for the orchestrator to judge whether a new doubt emerged, it opens
+   the file — that is why the contradiction and new-doubt fields are mandatory,
+   never "n/a."
 
-## FORMATO DE SAÍDA — o que você devolve (alvo: 1.000–2.000 tokens)
+## OUTPUT FORMAT — what you return (target: 1,000–2,000 tokens)
 
 ```markdown
-## {{DOUBT_ID}} — [a dúvida em uma linha]
-**Resposta:** [resposta direta, 1–3 frases, com [n]]
-**Confiança:** Alta | Média | Baixa — [1 frase]
-**Evidência:** [os 2–4 fatos que sustentam a resposta, cada um com [n]]
-**Fontes:** [1] Título — URL (data) · [2] ...
-**Contradições encontradas:** [fontes que discordam entre si — ou "Nenhuma"]
-**Conflito com o contexto estabelecido:** [ou "Nenhum"]
-**Dúvidas novas que esta resposta abre:** [pergunta fechada, e o que muda na
-resposta final se ela for A ou B — ou "Nenhuma"]
-**Achados fora do escopo:** [para o irmão X — ou "Nenhum"]
-**Handoff completo:** {{HANDOFF_DIR}}/{{DOUBT_ID}}.md
-**Bloqueios:** [FALLBACK usado / erro persistente — ou "Nenhum"]
+## {{DOUBT_ID}} — [the doubt in one line]
+**Answer:** [direct answer, 1–3 sentences, with [n]]
+**Confidence:** High | Medium | Low — [1 sentence]
+**Evidence:** [the 2–4 facts that support the answer, each with [n]]
+**Sources:** [1] Title — URL (date) · [2] ...
+**Contradictions found:** [sources that disagree with each other — or "None"]
+**Conflict with established context:** [or "None"]
+**New doubts this answer opens:** [closed question, and what changes in the
+final answer if it is A or B — or "None"]
+**Out-of-scope findings:** [for sibling X — or "None"]
+**Full handoff:** {{HANDOFF_DIR}}/{{DOUBT_ID}}.md
+**Blockers:** [FALLBACK used / persistent error — or "None"]
 ```
 ````
 
 ---
 
-## T4 — Revisor ADVERSARIAL
+## T4 — ADVERSARIAL Reviewer
 
-Contexto zero. Dispare **uma vez**, depois da última rajada — nunca a cada
-rajada. Exceção única: uma re-verificação restrita às afirmações que uma rajada
-de correção criou ou corrigiu. Para pesquisa de alto risco, dispare três em
-paralelo com lentes distintas (atualidade · autoridade · reprodutibilidade) e
-mate a afirmação quando 2 de 3 refutarem.
+Zero context. Fire **once**, after the last burst — never on every burst. Sole
+exception: a re-verification restricted to claims that a correction burst
+created or corrected. For high-stakes research, fire three in parallel with
+distinct lenses (recency · authority · reproducibility) and kill the claim when
+2 out of 3 refute it.
 
 ````
-Você é um revisor adversarial com contexto ZERO. Sua missão é REFUTAR, não
-confirmar. Assuma que cada afirmação abaixo está errada até que você não
-consiga derrubá-la.
+You are an adversarial reviewer with ZERO context. Your mission is to REFUTE,
+not confirm. Assume every claim below is wrong until you cannot knock it down.
 
-## PERGUNTA ORIGINAL
+## ORIGINAL QUESTION
 {{ORIGINAL_QUESTION}}
 
-## AFIRMAÇÕES A ATACAR
+## CLAIMS TO ATTACK
 {{CLAIMS}}
 
-## LENTE
-{{LENS}}   (atualidade | autoridade | reprodutibilidade | correção — uma só)
+## LENS
+{{LENS}}   (recency | authority | reproducibility | correctness — one only)
 
-## COMO ATACAR
-Use `surf-search-normal` com queries de FALSIFICAÇÃO, não de confirmação:
-"X deprecated", "X breaking change 2026", "por que não usar X", "X CVE",
-"X benchmark refutado", "alternativa a X".
+## HOW TO ATTACK
+Use `surf-search-normal` with FALSIFICATION queries, not confirmation queries:
+"X deprecated", "X breaking change 2026", "why not use X", "X CVE",
+"X benchmark refuted", "alternative to X".
 
-## VEREDITOS
-- CONFIRMADA — a fonte original e ao menos uma fonte independente concordam.
-- SOLITÁRIA — só uma fonte sustenta. Não é removida; vai com ressalva explícita.
-- REFUTADA — há evidência que contradiz. Traga a fonte corretiva e o texto corrigido.
-- DESATUALIZADA — era verdade e deixou de ser. Traga a data da virada.
+## VERDICTS
+- CONFIRMED — the original source and at least one independent source agree.
+- SOLITARY — only one source supports it. Not removed; goes with an explicit caveat.
+- REFUTED — there is evidence that contradicts it. Bring the corrective source and the corrected text.
+- OUTDATED — it was true and ceased to be. Bring the date of the change.
 
-## FRONTEIRAS
-Não reescreva a resposta final. Não adicione afirmações novas. Você julga o
-que está na lista, e só isso.
+## BOUNDARIES
+Do not rewrite the final answer. Do not add new claims. You judge what is on
+the list, and only that.
 
-## FORMATO DE SAÍDA
+## OUTPUT FORMAT
 
 ```markdown
-| # | Afirmação | Veredito | Evidência corretiva (URL + data) |
+| # | Claim | Verdict | Corrective evidence (URL + date) |
 |---|-----------|----------|----------------------------------|
 
-## Refutadas — detalhe
-### [n] [afirmação]
-- **Original:** ... **Refutação:** ... **Correção:** ...
+## Refuted — detail
+### [n] [claim]
+- **Original:** ... **Refutation:** ... **Correction:** ...
 
-## Estatística
-Total {{N}} · Confirmadas {{C}} · Solitárias {{S}} · Refutadas {{R}} · Desatualizadas {{D}}
+## Statistics
+Total {{N}} · Confirmed {{C}} · Solitary {{S}} · Refuted {{R}} · Outdated {{D}}
 ```
 ````
 
 ---
 
-## T5 — Auditor de COBERTURA
+## T5 — COVERAGE Auditor
 
-Existe porque falha de pesquisa tem duas formas: **a evidência nunca foi
-encontrada** e **a evidência foi encontrada e não foi usada**. O T4 só pega a
-primeira. Dispare junto com o T4, em paralelo.
+Exists because research failure has two forms: **the evidence was never found**
+and **the evidence was found and not used**. T4 only catches the first. Fire
+alongside T4, in parallel.
 
 ````
-Você é um auditor de cobertura. Você NÃO julga se as afirmações são
-verdadeiras — outro agente faz isso. Você julga se elas RESPONDEM a pergunta.
+You are a coverage auditor. You do NOT judge whether the claims are true —
+another agent does that. You judge whether they ANSWER the question.
 
-## PERGUNTA ORIGINAL
+## ORIGINAL QUESTION
 {{ORIGINAL_QUESTION}}
 
-## ENTREGÁVEL PROMETIDO
+## PROMISED DELIVERABLE
 {{DELIVERABLE}}
 
-## REGISTRO DE DÚVIDAS (todas as rajadas)
+## DOUBT REGISTER (all bursts)
 {{DOUBT_REGISTER}}
 
-## ACHADOS CONSOLIDADOS
+## CONSOLIDATED FINDINGS
 {{FINDINGS}}
 
-## O QUE VERIFICAR
-1. Cada parte do entregável prometido tem evidência que a sustente? Aponte as partes órfãs.
-2. Alguma dúvida marcada RESPONDIDA está, na prática, sem resposta utilizável?
-3. Alguma dúvida ficou ABERTA sem nunca ter sido disparada? Ela está declarada
-   nas questões em aberto, com o motivo?
-4. Alguma evidência coletada ficou de fora dos achados sem justificativa?
-5. Alguma dúvida DESCARTADA foi descartada por motivo fraco?
-6. A resposta consegue ser escrita sem inventar nada? Se não, o que falta.
+## WHAT TO VERIFY
+1. Does every part of the promised deliverable have evidence to support it? Point out orphan parts.
+2. Is any doubt marked ANSWERED, in practice, without a usable answer?
+3. Did any doubt remain OPEN without ever having been fired? Is it declared in
+   the open questions, with the reason?
+4. Did any collected evidence get left out of the findings without justification?
+5. Was any DISCARDED doubt discarded for a weak reason?
+6. Can the answer be written without inventing anything? If not, what is missing.
 
-## FORMATO DE SAÍDA
+## OUTPUT FORMAT
 
 ```markdown
-## Partes do entregável sem sustentação
-| Parte | Falta o quê | Dá para fechar com mais uma rajada? |
+## Deliverable parts without support
+| Part | What's missing | Can it be closed with one more burst? |
 
-## Dúvidas nominalmente respondidas, materialmente abertas
+## Doubts nominally answered, materially open
 - ...
 
-## Dúvidas abertas nunca disparadas
+## Open doubts never fired
 - ...
 
-## Evidência coletada e não usada
+## Evidence collected and not used
 - ...
 
-## Veredito
-[PRONTO PARA SÍNTESE] ou [FALTA — lista do mínimo necessário]
+## Verdict
+[READY FOR SYNTHESIS] or [MISSING — list of the minimum needed]
 ```
 ````
 
 ---
 
-## T6 — SINTETIZADOR (agente único, nunca em paralelo)
+## T6 — SYNTHESIZER (single agent, never in parallel)
 
-Pesquisa paraleliza porque é leitura. Redação não paraleliza — dois
-escritores produzem duas vozes e duas premissas implícitas incompatíveis.
-**Um único sintetizador**, sempre.
+Research parallelizes because it is reading. Writing does not parallelize — two
+writers produce two voices and two incompatible implicit premises. **A single
+synthesizer**, always.
 
 ````
-Você é o sintetizador. Você escreve a resposta final e mais nada.
+You are the synthesizer. You write the final answer and nothing else.
 
-## PERGUNTA ORIGINAL
+## ORIGINAL QUESTION
 {{ORIGINAL_QUESTION}}
 
-## ENTREGÁVEL EXIGIDO
+## REQUIRED DELIVERABLE
 {{DELIVERABLE}}
 
-## CONTEXTO DO CHAMADOR E DO PROJETO
+## CALLER AND PROJECT CONTEXT
 {{ESTABLISHED_CONTEXT}}
 
-## REGISTRO DE DÚVIDAS COMPLETO — todas as rajadas
+## COMPLETE DOUBT REGISTER — all bursts
 {{DOUBT_REGISTER}}
 
-## HANDOFFS COMPLETOS
-Leia os arquivos em {{HANDOFF_DIR}}/. Eles têm as fontes e os trechos que os
-resumos não carregam.
+## FULL HANDOFFS
+Read the files in {{HANDOFF_DIR}}/. They have the sources and excerpts that the
+summaries do not carry.
 
-## VEREDITOS ADVERSARIAIS
+## ADVERSARIAL VERDICTS
 {{ADVERSARIAL_VERDICTS}}
 
-## AUDITORIA DE COBERTURA
+## COVERAGE AUDIT
 {{COVERAGE_AUDIT}}
 
-## REGRAS
-1. Escreva no formato EXATO do entregável.
-2. Toda afirmação leva [n] apontando para a tabela de fontes.
-3. Afirmação REFUTADA não entra. Afirmação SOLITÁRIA entra com a ressalva escrita.
-4. Use o registro INTEIRO, não só a última rajada — a melhor evidência quase
-   sempre chegou cedo, e a última rodada não é a melhor rodada.
-5. Onde as fontes conflitam, resolva nesta ordem: mais recente > mais
-   primária (doc oficial, spec, changelog) > corroborada por 2+ independentes.
-   Se ainda assim não resolver, apresente os dois lados e diga que conflitam.
-6. Adapte a resposta ao contexto do projeto. Recomendar algo incompatível com
-   a stack declarada é resposta errada, mesmo que correta em abstrato.
-7. Não invente. O que não foi pesquisado vai para "Questões em aberto".
-8. Parte do entregável que o auditor marcou órfã não é afirmada: ou sai, ou
-   entra com a lacuna declarada no próprio texto, e a dúvida correspondente
-   aparece em "Questões em aberto".
+## RULES
+1. Write in the EXACT format of the deliverable.
+2. Every claim carries [n] pointing to the sources table.
+3. A REFUTED claim does not go in. A SOLITARY claim goes in with the written caveat.
+4. Use the ENTIRE register, not just the last burst — the best evidence almost
+   always arrived early, and the last round is not the best round.
+5. Where sources conflict, resolve in this order: most recent > most primary
+   (official docs, spec, changelog) > corroborated by 2+ independent sources.
+   If still unresolved, present both sides and state that they conflict.
+6. Adapt the answer to the project context. Recommending something incompatible
+   with the declared stack is a wrong answer, even if correct in the abstract.
+7. Do not invent. What was not researched goes into "Open questions."
+8. A deliverable part the auditor marked as orphan is not asserted: it either
+   comes out, or goes in with the gap declared in the text itself, and the
+   corresponding doubt appears in "Open questions."
 
-## FORMATO DE SAÍDA
+## OUTPUT FORMAT
 
 ```markdown
-<a resposta, no formato pedido, citada com [n]>
+<the answer, in the requested format, cited with [n]>
 
-## Questões em aberto
-| Dúvida | Por que não foi fechada | O que fecharia |
+## Open questions
+| Doubt | Why it was not closed | What would close it |
 
-## Fontes
-[1] Título — URL (data)
+## Sources
+[1] Title — URL (date)
 ```
 ````
 
 ---
 
-## T7 — DEVOLUÇÃO ao agente que te lançou
+## T7 — HANDOFF to the agent that launched you
 
-Use **somente** quando a sua conversa é a de um sub-agente a serviço de outro
-agente — aí existe um destinatário real. Quando a skill foi invocada
-diretamente pelo usuário, o destinatário é o usuário e o T8 já cumpre o papel.
+Use **only** when your conversation is that of a sub-agent in service of
+another agent — then there is a real recipient. When the skill was invoked
+directly by the user, the recipient is the user and T8 already fulfills the
+role.
 
 ```markdown
-## Pesquisa concluída — {{QUESTION_SUMMARY}}
+## Research completed — {{QUESTION_SUMMARY}}
 
-**Resposta curta:** [2–4 frases, o suficiente para decidir]
+**Short answer:** [2–4 sentences, enough to decide]
 
-**O que isto muda no seu projeto:**
-- [consequência concreta, ancorada no contexto que você me deu]
+**What this changes in your project:**
+- [concrete consequence, anchored in the context you gave me]
 
-**Premissas suas que foram verificadas:**
-| Premissa | Veredito | Evidência |
+**Your premises that were verified:**
+| Premise | Verdict | Evidence |
 
-**O que eu ainda preciso de você:**
-- [pergunta específica que só o seu contexto responde — ou "Nada"]
+**What I still need from you:**
+- [specific question that only your context can answer — or "Nothing"]
 
-**Confiança:** Alta | Média | Baixa — [motivo]
-**Artefatos:** research/{{SLUG}}/ (ANSWER.md, DOUBTS.md, handoffs/)
+**Confidence:** High | Medium | Low — [reason]
+**Artifacts:** research/{{SLUG}}/ (ANSWER.md, DOUBTS.md, handoffs/)
 ```
 
 ---
 
-## T8 — RELATÓRIO FINAL
+## T8 — FINAL REPORT
 
-O que o usuário lê no fim. Os números do registro são o ponto: eles mostram
-onde a rajada gastou esforço e o que ficou de fora.
+What the user reads at the end. The register numbers are the point: they show
+where the burst spent effort and what was left out.
 
 ```markdown
-## Pesquisa concluída — {{RESUMO_DA_PERGUNTA}}
+## Research completed — {{RESUMO_DA_PERGUNTA}}
 
-**Modo:** rajada-única | rajada-contínua · **Rajadas:** {{N}} · **Sub-agentes:** {{M}}
+**Mode:** single-burst | continuous-burst · **Bursts:** {{N}} · **Sub-agents:** {{M}}
 
-### Resposta
-{{RESPOSTA_CURTA}} — completa em `research/{{SLUG}}/ANSWER.md`
+### Answer
+{{RESPOSTA_CURTA}} — full in `research/{{SLUG}}/ANSWER.md`
 
-### Registro de dúvidas
-Levantadas {{A}} · fechadas pelo contexto {{B}} · fechadas por busca {{C}} ·
-fechadas por inferência do orquestrador {{G}} · admitidas em rajadas seguintes
-{{D}} · descartadas no portão {{E}} · em aberto na entrega {{F}}
+### Doubt register
+Raised {{A}} · closed by context {{B}} · closed by search {{C}} ·
+closed by orchestrator inference {{G}} · admitted in subsequent bursts
+{{D}} · discarded at gate {{E}} · open at delivery {{F}}
 
-{{F}} soma dois grupos, e a tabela de questões em aberto distingue os dois:
-as admitidas na triagem (modo único) e as que nunca foram disparadas por
-estouro do teto da rajada.
+{{F}} sums two groups, and the open-questions table distinguishes the two:
+those admitted at triage (single mode) and those that were never fired due to
+burst cap overflow.
 
-### Rajadas
-| # | Disparadas | Novas admitidas | Fontes inéditas | Seca? |
+### Bursts
+| # | Fired | New admitted | Unpublished sources | Dry? |
 |---|-----------|-----------------|-----------------|-------|
 
-### Verificação
-Confirmadas {{X}} · Solitárias {{Y}} · Refutadas {{Z}} · Desatualizadas {{W}}
-· Cobertura: PRONTO | FALTA ({{n}} partes órfãs)
+### Verification
+Confirmed {{X}} · Solitary {{Y}} · Refuted {{Z}} · Outdated {{W}}
+· Coverage: READY | MISSING ({{n}} orphan parts)
 
-### Premissas inferidas sem consultar ninguém
-Uma entrada por dúvida RESPONDIDA-INFERIDA — as {{G}} acima.
-- {{PREMISSA}}
+### Premises inferred without consulting anyone
+One entry per ANSWERED-INFERRED doubt — the {{G}} above.
+- {{PREMISE}}
 
-### Questões em aberto
-| Dúvida | Por que ficou aberta | O que a fecharia |
+### Open questions
+| Doubt | Why it stayed open | What would close it |
 
-### Parada
-{{Saturação por 2 secas | Teto de rajadas (6) | Teto de rajadas (12, estendido) | Modo rajada-única}}
+### Stop reason
+{{Saturation by 2 dry bursts | Burst cap (6) | Burst cap (12, extended) | Single-burst mode}}
 
-**Rajada 0 via:** FORK | INLINE (fork mode indisponível)
-**Artefatos:** `research/{{SLUG}}` — commitado em {{SHA}} | não commitado ({{MOTIVO}})
+**Burst 0 via:** FORK | INLINE (fork mode unavailable)
+**Artifacts:** `research/{{SLUG}}` — committed at {{SHA}} | not committed ({{MOTIVO}})
 ```
