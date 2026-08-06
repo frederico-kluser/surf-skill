@@ -64,6 +64,7 @@ para briefs longos.
 | `--search-mode` | normal | `fast` \| `normal` \| `slow` |
 | `--ai-model <slug>` | `deepseek/deepseek-v4-pro` | Sobrescreve o LLM |
 | `--budget-ms N` | autodetectado | Passe 600000 para unlimit |
+| `--no-budget` | off | Disable self-budget abort — let calls run to provider's per-request ceiling. No-limit harnesses only (Pi core). |
 | `--no-cache` | off | Quando os dados precisam ser frescos |
 | `--json` | off | **Sempre passe** — é o que alimenta o handoff |
 | `--ledger` | off | Anexa a tabela de cobertura por query |
@@ -140,7 +141,7 @@ com resposta citável é entrega válida, não falha.
 | Código | Significado | O que o sub-agente faz |
 |---|---|---|
 | 0 | Resposta pronta (possivelmente degradada) | Segue, checando os três sinais acima |
-| 1 | Nada recuperado | Escada completa em `burst-templates.md`, T3 regra 3 — ela é a única |
+| 1 | No sources retrieved, or unclassified error (network failure, unexpected exception) | Escada completa em `burst-templates.md`, T3 regra 3 — ela é a única |
 | 2 | Erro de uso | Corrige o comando |
 | 143 | O harness matou a chamada | Refaz com `surf-search-normal`, ou pede timeout maior |
 
